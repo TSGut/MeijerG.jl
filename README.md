@@ -24,7 +24,7 @@ G_{p,q}^{m,n}\!\left(z\;\middle|\;\begin{matrix}a_1,\dots,a_p\\b_1,\dots,b_q\end
 \,z^s\,ds.
 $$
 
-For the full derivation, expansion formulas, and references, see `docs/src/math.md`.
+For the full derivation, expansion formulas, and references, see the Math notes in the docs: [Math notes](docs/src/math.md).
 
 ---
 
