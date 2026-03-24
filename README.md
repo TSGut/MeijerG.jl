@@ -1,6 +1,6 @@
 # MeijerG.jl
 
-[![CI](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml)
+[![CI](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml/badge.svg)](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml)
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://tsgut.github.io/MeijerG.jl/)
 
 A Julia package for computing the **Meijer G-function** — a single unifying
