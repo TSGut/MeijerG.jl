@@ -1,29 +1,3 @@
-name: tests
-
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-
-jobs:
-  test:
-    name: Run tests on Julia 1.12
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Julia
-        uses: julia-actions/setup-julia@v1
-        with:
-          version: '1.12'
-
-      - name: Install dependencies
-        run: julia --project=. -e "using Pkg; Pkg.instantiate(); Pkg.precompile()"
-
-      - name: Run tests
-        run: julia --project=. -e "using Pkg; Pkg.test()"
 name: Tests
 
 on:
@@ -57,7 +31,7 @@ jobs:
         uses: julia-actions/cache@v2
 
       - name: Instantiate
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
       - name: Run tests
         run: julia --project=. -e 'using Pkg; Pkg.test()'
