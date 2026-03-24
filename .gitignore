@@ -1,0 +1,38 @@
+# Ignore any directory named `output` anywhere in the tree
+**/output/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*~
+*.swo
+
+# Julia
+.julia/
+*.ji
+*.ji.*
+*.jl~
+*.jl.cov
+*.jld
+*.jld2
+*.jld3
+.cache/
+
+# Build/artifact products
+/deps/
+/artifacts/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
