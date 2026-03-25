@@ -3,7 +3,7 @@
 `MeijerG.jl` computes the Meijer G-function
 
 ```math
-G_{p,q}^{m,n}\!\left(z\;\middle|\;\begin{matrix}a_1,\ldots,a_p \\ b_1,\ldots,b_q\end{matrix}\right)
+G_{p,q}^{m,n}\left(z\;\middle|\;\begin{matrix}a_1,\ldots,a_p \\ b_1,\ldots,b_q\end{matrix}\right)
 ```
 
 using residue-based expansions through `HypergeometricFunctions.jl` and

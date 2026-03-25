@@ -17,7 +17,7 @@ results.
 The Meijer G-function is defined by the Mellin–Barnes integral
 
 $$
-G_{p,q}^{m,n}\!\left(z\;\middle|\;\begin{matrix}a_1,\dots,a_p\\ b_1,\dots,b_q\end{matrix}\right)
+G_{p,q}^{m,n}\left(z\;\middle|\;\begin{array}{c}a_1,\dots,a_p\\ b_1,\dots,b_q\end{array}\right)
 = \frac{1}{2\pi i}\int_{\mathcal{L}}
 \frac{\prod_{j=1}^{m}\Gamma(b_j-s)\prod_{j=1}^{n}\Gamma(1-a_j+s)}
   {\prod_{j=m+1}^{q}\Gamma(1-b_j+s)\prod_{j=n+1}^{p}\Gamma(a_j-s)}

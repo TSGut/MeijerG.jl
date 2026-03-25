@@ -11,7 +11,7 @@ from the Mellin–Barnes contour integral representation. See
 The Meijer G-function is defined by the Mellin–Barnes contour integral (DLMF §16.17):
 
 ```math
-G_{p,q}^{m,n}\!\left(z\;\middle|\;\begin{matrix}a_1,\dots,a_p\\b_1,\dots,b_q\end{matrix}\right)
+G_{p,q}^{m,n}\left(z\;\middle|\;\begin{matrix}a_1,\dots,a_p\\b_1,\dots,b_q\end{matrix}\right)
 = \frac{1}{2\pi i}\int_{\mathcal{L}}
 \frac{\displaystyle\prod_{j=1}^{m}\Gamma(b_j-s)\;\prod_{j=1}^{n}\Gamma(1-a_j+s)}
 		 {\displaystyle\prod_{j=m+1}^{q}\Gamma(1-b_j+s)\;\prod_{j=n+1}^{p}\Gamma(a_j-s)}
@@ -36,7 +36,7 @@ When $p < q$, or when $p = q$ and $|z| \le 1$, the contour is closed around
 the poles of $\Gamma(b_j - s)$ for $j=1,\dots,m$. This yields (DLMF 16.17.2):
 
 ```math
-\boxed{G_{p,q}^{m,n}\!\left(z\,\middle|\,\mathbf{a};\,\mathbf{b}\right)
+\boxed{G_{p,q}^{m,n}\left(z\,\middle|\,\mathbf{a};\,\mathbf{b}\right)
 = \sum_{k=1}^{m}
 	\underbrace{
 		\frac{\displaystyle\prod_{\substack{j=1\\j\ne k}}^{m}\!\!\Gamma(b_j-b_k)
@@ -45,7 +45,7 @@ the poles of $\Gamma(b_j - s)$ for $j=1,\dots,m$. This yields (DLMF 16.17.2):
 				 \;\prod_{j=n+1}^{p}\!\!\Gamma(a_j-b_k)}
 	}_{=:\;A_k}
 	\;z^{b_k}\;
-	{}_{p}F_{q-1}\!\left(\begin{matrix}1+b_k-a_1,\dots,1+b_k-a_p\\
+	{}_{p}F_{q-1}\left(\begin{matrix}1+b_k-a_1,\dots,1+b_k-a_p\\
 		(1+b_k-b_j)_{j\ne k}\end{matrix}
 		\;\middle|\;(-1)^{p-m-n}z\right)}
 ```
@@ -56,7 +56,7 @@ When $p > q$, or when $p = q$ and $|z| > 1$, the contour is closed around
 the poles of $\Gamma(1-a_j+s)$ for $j=1,\dots,n$, yielding a series in $z^{-1}$:
 
 ```math
-\boxed{G_{p,q}^{m,n}\!\left(z\,\middle|\,\mathbf{a};\,\mathbf{b}\right)
+\boxed{G_{p,q}^{m,n}\left(z\,\middle|\,\mathbf{a};\,\mathbf{b}\right)
 = \sum_{h=1}^{n}
 	\underbrace{
 		\frac{\displaystyle\prod_{\substack{j=1\\j\ne h}}^{n}\!\!\Gamma(a_h-a_j)
@@ -65,7 +65,7 @@ the poles of $\Gamma(1-a_j+s)$ for $j=1,\dots,n$, yielding a series in $z^{-1}$:
 				 \;\prod_{j=m+1}^{q}\!\!\Gamma(a_h-b_j)}
 	}_{=:\;B_h}
 	\;z^{a_h-1}\;
-	{}_{q}F_{p-1}\!\left(\begin{matrix}1-a_h+b_1,\dots,1-a_h+b_q\\
+	{}_{q}F_{p-1}\left(\begin{matrix}1-a_h+b_1,\dots,1-a_h+b_q\\
 		(1-a_h+a_j)_{j\ne h}\end{matrix}
 		\;\middle|\;(-1)^{q-m-n}z^{-1}\right)}
 ```
@@ -94,13 +94,13 @@ Many classical special functions are Meijer G special cases. Examples:
 
 | Function | G-function identity |
 |---|---|
-| $e^x$ | $G_{0,1}^{1,0}\!\left(-x\,\middle|\,\begin{matrix}-\\0\end{matrix}\right)$ |
-| $\sin x$ | $\sqrt{\pi}\,G_{0,2}^{1,0}\!\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\\tfrac{1}{2},0\end{matrix}\right)$ |
-| $\cos x$ | $\sqrt{\pi}\,G_{0,2}^{1,0}\!\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\0,\tfrac{1}{2}\end{matrix}\right)$ |
-| $J_\nu(x)$ | $\left(\tfrac{x}{2}\right)^\nu G_{0,2}^{1,0}\!\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\\tfrac{\nu}{2},-\tfrac{\nu}{2}\end{matrix}\right)$ |
-| $K_\nu(x)$ | $\tfrac{1}{2}G_{0,2}^{2,0}\!\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\\tfrac{\nu}{2},-\tfrac{\nu}{2}\end{matrix}\right)$ |
-| $\gamma(\alpha,x)$ | $G_{1,2}^{1,1}\!\left(x\,\middle|\,\begin{matrix}1\\\alpha,0\end{matrix}\right)$ |
-| $\Gamma(\alpha,x)$ | $G_{1,2}^{2,0}\!\left(x\,\middle|\,\begin{matrix}1\\\alpha,0\end{matrix}\right)$ |
+| $e^x$ | $G_{0,1}^{1,0}\left(-x\,\middle|\,\begin{matrix}-\\0\end{matrix}\right)$ |
+| $\sin x$ | $\sqrt{\pi}\,G_{0,2}^{1,0}\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\\tfrac{1}{2},0\end{matrix}\right)$ |
+| $\cos x$ | $\sqrt{\pi}\,G_{0,2}^{1,0}\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\0,\tfrac{1}{2}\end{matrix}\right)$ |
+| $J_\nu(x)$ | $\left(\tfrac{x}{2}\right)^\nu G_{0,2}^{1,0}\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\\tfrac{\nu}{2},-\tfrac{\nu}{2}\end{matrix}\right)$ |
+| $K_\nu(x)$ | $\tfrac{1}{2}G_{0,2}^{2,0}\left(\tfrac{x^2}{4}\,\middle|\,\begin{matrix}-\\\tfrac{\nu}{2},-\tfrac{\nu}{2}\end{matrix}\right)$ |
+| $\gamma(\alpha,x)$ | $G_{1,2}^{1,1}\left(x\,\middle|\,\begin{matrix}1\\\alpha,0\end{matrix}\right)$ |
+| $\Gamma(\alpha,x)$ | $G_{1,2}^{2,0}\left(x\,\middle|\,\begin{matrix}1\\\alpha,0\end{matrix}\right)$ |
 
 ## References
 
