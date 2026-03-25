@@ -3,9 +3,17 @@
 [![CI](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml/badge.svg)](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml)
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://tsgut.github.io/MeijerG.jl/)
 
-A Julia package for computing the **Meijer G-function** — a single unifying
+A Julia package for computing the **Meijer G-function** defined by the Mellin-Barnes integral
+$$
+G_{p,q}^{m,n}\left(z \hspace{1mm} \left| {a_1,\dots,a_p}\atop{b_1,\dots,b_q}\right) \right.
+= \frac{1}{2\pi i}\int_{\mathcal{L}}
+\frac{\prod_{j=1}^{m}\Gamma(b_j-s)\prod_{j=1}^{n}\Gamma(1-a_j+s)}
+  {\prod_{j=m+1}^{q}\Gamma(1-b_j+s)\prod_{j=n+1}^{p}\Gamma(a_j-s)}
+ z^s ds.
+$$
+The Meijer-G function is a single unifying
 function that encompasses almost many classical special functions as particular
-cases.  
+cases and appears, even in its more general forms, in many applications.
 
 The package is built on top of
 [HypergeometricFunctions.jl](https://github.com/JuliaMath/HypergeometricFunctions.jl)
@@ -14,23 +22,7 @@ and supports **arbitrary Julia numeric types**: pass `Float64`, `Complex{Float64
 double precision or `BigFloat` (with any precision) for arbitrary-precision
 results.
 
-The recommended entry point is `meijerg(...)`, which applies explicit reductions for recognized
-special cases, uses perturbation for confluent-pole configurations, and otherwise falls back to
-the pure residue evaluator `meijerg_slater(...)`.
-
-The Meijer G-function is defined by the Mellin–Barnes integral
-
-$$
-G_{p,q}^{m,n}\left(z \hspace{1mm} \left| {a_1,\dots,a_p}\atop{b_1,\dots,b_q}\right) \right.
-= \frac{1}{2\pi i}\int_{\mathcal{L}}
-\frac{\prod_{j=1}^{m}\Gamma(b_j-s)\prod_{j=1}^{n}\Gamma(1-a_j+s)}
-  {\prod_{j=m+1}^{q}\Gamma(1-b_j+s)\prod_{j=n+1}^{p}\Gamma(a_j-s)}
- z^s ds.
-$$
-
-but rather than evaluating this integral numerically, this package uses known explicit reductions along with the residue theorem to obtain finite sums of generalized hypergeometric functions. In the future, other evaluation approaches may be added to the polyagorithm.
-
-For the full mathematical explanation and references see the [Math notes](docs/src/math.md). in the docs: 
+For an explanation of how this package computes the Meijer-G function see the [Math notes](docs/src/math.md). in the docs.
 
 ---
 
