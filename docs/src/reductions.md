@@ -153,7 +153,23 @@ result = meijerg(a, b, 1, 1, z)
 | **Always reduces?** | No | Yes (when possible) |
 | **Speed for special cases** | Slower | Faster (direct formula) |
 
-## Examples
+
+## What about the many G → hypergeometric reductions?
+
+The Meijer G-function has a well-known relationship with the generalized hypergeometric
+function ${}_{p}F_{q}$: many classical special functions can be written as both a Meijer G
+and as a specific ${}_{p}F_{q}$ or linear combinations thereof. However, the residue expansion used in this package already is the hypergeometric reduction.
+
+To see why, consider the lower expansion for a simple case like
+$G_{0,2}^{1,0}(z \mid -;\, \nu/2, -\nu/2)$ (related to Bessel J). With $m=1$, the
+residue loop executes once ($k=1$) and produces:
+
+$$
+\text{result} = A_1 \cdot z^{b_1} \cdot {}_{0}F_1\!\left(\begin{array}{c}-\\ \beta_1\end{array}\;\middle|\; (-1)^{p-m-n}z\right)
+$$
+
+That single `pFq(α, β, argument)` call **is** the hypergeometric representation found in many formula collections, derived
+analytically from the pole structure.
 
 ### Build sin via Meijer G
 

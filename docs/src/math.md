@@ -76,17 +76,15 @@ the poles of $\Gamma(1-a_j+s)$ for $j=1,\dots,n$, yielding a series in $z^{-1}$:
 |---|---|
 | $p < q$ | lower (always) |
 | $p > q$ | upper (always) |
-| $p = q$, $|z| \le 1$ | lower |
-| $p = q$, $|z| > 1$ | upper |
+| $p = q, |z| \le 1$ | lower |
+| $p = q, |z| > 1$ | upper |
 
 ## Order reduction
 
 Before computing, the implementation removes cancelling $\Gamma$ factors:
 
-- If $a_k = b_j$ for some $k \le n$ and $j > m$, remove both parameters and
-	decrement $(p,q,n)$ by one.
-- If $a_k = b_j$ for some $k > n$ and $j \le m$, remove both parameters and
-	decrement $(p,q,m)$ by one.
+- If $a_k = b_j$ for some $k \le n$ and $j > m$, remove both parameters and decrement $(p,q,n)$ by one.
+- If $a_k = b_j$ for some $k > n$ and $j \le m$, remove both parameters and decrement $(p,q,m)$ by one.
 
 ## Special Case Verification
 
