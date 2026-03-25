@@ -10,7 +10,7 @@ cases.
 The package is built on top of
 [HypergeometricFunctions.jl](https://github.com/JuliaMath/HypergeometricFunctions.jl)
 and [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl)
-and supports **arbitrary Julia numeric types**: pass `Float64` for standard
+and supports **arbitrary Julia numeric types**: pass `Float64`, `Complex{Float64}` for standard
 double precision or `BigFloat` (with any precision) for arbitrary-precision
 results.
 
@@ -28,7 +28,7 @@ G_{p,q}^{m,n}\left(z \hspace{1mm} \left| {a_1,\dots,a_p}\atop{b_1,\dots,b_q}\rig
  z^s ds.
 $$
 
-but rather than evaluating this integral numerically, this package uses known explicit reductions along with the residue theorem to obtain finite sums of generalized hypergeometric functions.
+but rather than evaluating this integral numerically, this package uses known explicit reductions along with the residue theorem to obtain finite sums of generalized hypergeometric functions. In the future, other evaluation approaches may be added to the polyagorithm.
 
 For the full mathematical explanation and references see the [Math notes](docs/src/math.md). in the docs: 
 
@@ -54,7 +54,7 @@ Pkg.add(url = "https://github.com/TSGut/MeijerG.jl")
 
 ---
 
-## Quick start
+## Examples
 
 ```julia
 using MeijerG
@@ -80,7 +80,7 @@ meijerg_slater((0.25,), (1.75,), (0.5,), (1.25,), 2.0)
 
 ---
 
-## API reference
+## Supported methods
 
 ### `meijerg(a, b, m, n, z)`
 
