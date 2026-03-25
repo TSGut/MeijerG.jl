@@ -1,9 +1,4 @@
 @testset "Domain behavior" begin
-    @testset "Confluent pole rejection" begin
-        # Confluent poles are rejected.
-        @test_throws DomainError meijerg((1.0,), (0.0,), 1, 1, 0.5)
-    end
-
     @testset "Inputs" begin
         # Invalid m index raises argument error.
         @test_throws ArgumentError meijerg((0.2,), (0.1,), 2, 0, 0.5)

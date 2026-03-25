@@ -4,7 +4,7 @@
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://tsgut.github.io/MeijerG.jl/)
 
 A Julia package for computing the **Meijer G-function** — a single unifying
-function that encompasses almost all classical special functions as particular
+function that encompasses almost many classical special functions as particular
 cases.  
 
 The package is built on top of
@@ -28,7 +28,9 @@ G_{p,q}^{m,n}\left(z \hspace{1mm} \left| {a_1,\dots,a_p}\atop{b_1,\dots,b_q}\rig
  z^s ds.
 $$
 
-For the full derivation, expansion formulas, and references, see the Math notes in the docs: [Math notes](docs/src/math.md).
+but rather than evaluating this integral numerically, this package uses known explicit reductions along with the residue theorem to obtain finite sums of generalized hypergeometric functions.
+
+For the full mathematical explanation and references see the [Math notes](docs/src/math.md). in the docs: 
 
 ---
 
@@ -100,7 +102,7 @@ available, uses perturbation for confluent-pole cases, and otherwise delegates t
 meijerg(a_left, a_right, b_left, b_right, z) -> Number
 ```
 
-Split-parameter form following the Mathematica/mpmath convention.  Here
+Split-parameter form following the Wolfram Mathematica and mpmath convention.  Here
 `n = length(a_left)` and `m = length(b_left)`.  The full parameter tuples
 are assembled as `a = [a_left; a_right]` and `b = [b_left; b_right]`.
 
@@ -114,20 +116,3 @@ meijerg_slater(a, b, m, n, z) -> Number
 
 Pure Slater residue evaluation with no explicit reductions and no perturbation handling.
 This is intended for advanced users who want direct access to the residue-expansion algorithm.
-
-**Type promotion.** All parameters and `z` are promoted to a common type via
-Julia's standard `promote` mechanism before any computation, so mixing
-`Float64` and `BigFloat` inputs works as expected.
-
----
-
-## Current Limitations
-
-- **Confluent poles in `meijerg`.** When parameters in the active residue family
-  differ by integers, logarithmic terms appear in Slater's expansion. The public
-  `meijerg` API handles these cases through a stable perturbation limit of the
-  residue sum.
-- **`meijerg_slater` is literal.** The pure Slater API does not perform perturbation
-  or reductions; it evaluates the raw residue expansion directly.
-- **Non-zero argument.** $z = 0$ is not supported and raises a `DomainError`.
-

@@ -154,11 +154,6 @@ and denominator creates a simple logarithmic pole (DLMF 15.8.2, Gradshteyn & Ryz
 
 **Mapping**: `meijerg((1, 1), (1, 0), 1, 2, z)` → `log1p(z) / z`
 
-**Why this matters**: 
-- Direct computation avoids integrating the residue series, which has slow convergence near z=0
-- Parameter perturbation (the full evaluator's approach) requires 4 independent G-function evalutions + Lagrange extrapolation
-- Julia's `log1p` provides superior accuracy for small z, avoiding cancellation loss
-
 **Usage**:
 ```julia
 z = 0.3
