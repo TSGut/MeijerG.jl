@@ -104,10 +104,9 @@ Julia's standard `promote` mechanism before any computation, so mixing
 
 ## Current Limitations
 
-- **Simple poles only.** The current implementation requires that no two of
-  $b_1,\dots,b_m$ differ by an integer (lower expansion) and no two of
-  $a_1,\dots,a_n$ differ by an integer (upper expansion).  Confluent poles
-  introduce logarithmic terms; passing parameters that violate this condition
-  raises a `DomainError`.
+- **Confluent poles supported via limits.** When parameters in the active
+  residue family differ by integers, logarithmic terms appear in Slater's
+  expansion. These cases are handled through a stable perturbation limit of the
+  residue sum.
 - **Non-zero argument.** $z = 0$ is not supported and raises a `DomainError`.
 

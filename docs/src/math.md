@@ -25,6 +25,11 @@ $\Gamma(1 - a_j + s)$ (to the left).
 Rather than evaluating this integral numerically, the package uses the residue
 theorem to obtain finite sums of generalized hypergeometric functions.
 
+When poles in the selected residue family are confluent (integer-separated
+parameters in the active set), Slater's expansion acquires logarithmic terms.
+`MeijerG.jl` evaluates these cases by a parameter-perturbation limit of the
+same residue representation, which recovers the finite logarithmic contribution.
+
 ## Slater's lower expansion
 
 When $p < q$, or when $p = q$ and $|z| \le 1$, the contour is closed around

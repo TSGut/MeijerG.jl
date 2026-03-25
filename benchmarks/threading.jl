@@ -15,7 +15,7 @@ The benchmark accepts the following optional environment variables:
 - `BENCHMARK_TYPE` = "Float64" (default) or "BigFloat" to run BigFloat workloads.
 - `BENCHMARK_PREC` = precision (bits) used when `BENCHMARK_TYPE=BigFloat` (default: 256).
 
-Output: `benchmarks/output/threading.csv` and (if `Plots.jl` is available)
+Output: `benchmarks/output/threading.csv` and
 `benchmarks/output/threading.png`.
 """
 function run_threading_benchmarks()
@@ -124,14 +124,6 @@ function run_threading_benchmarks()
     csv_path = joinpath(OUTPUT_DIR, "threading.csv")
     write_table(csv_path, ["threads", "type", "order_pq", "median_seconds"], rows)
     println("Threading CSV written to: $csv_path")
-
-    # Optional plot if Plots.jl is available
-    try
-        @eval import Plots
-    catch
-        @warn "Plots.jl not available; skipping threading plot"
-        return nothing
-    end
 
     # Produce one plot per numeric type
     for type_str in bench_types

@@ -13,22 +13,38 @@ Compute the Meijer G-function
 G_{p,q}^{m,n}\!\left(z\;\middle|\;\begin{matrix} a_1,\ldots,a_p \\ b_1,\ldots,b_q \end{matrix}\right)
 ```
 
-using Slater's residue expansions. This implementation supports arbitrary Julia
-number types, including `BigFloat` and complex numbers built from them, by
-forwarding the hypergeometric pieces to `HypergeometricFunctions.jl` and the
-Gamma factors to `SpecialFunctions.jl`.
+using Slater's residue expansions (DLMF §16.17). This is the **core evaluator** that always
+uses the true mathematical definition, never applying explicit reductions to simpler functions.
 
-Arguments:
-- `a`, `b`: complete upper and lower parameter collections
-- `m`, `n`: Meijer G indices with `0 <= m <= length(b)` and `0 <= n <= length(a)`
-- `z`: evaluation point
+# Overview
 
-The split-parameter form follows the common convention
-`meijerg(a_left, a_right, b_left, b_right, z)`, where
-`n == length(a_left)` and `m == length(b_left)`.
+The Meijer G-function is defined via a Mellin–Barnes contour integral whose residues yield
+finite sums of generalized hypergeometric functions (pFq). This implementation:
+- Uses the lower expansion (Slater, DLMF 16.17.2) for p < q or p = q, |z| ≤ 1
+- Uses the upper expansion (Slater, DLMF 16.17.3) for p > q or p = q, |z| > 1
+- Handles confluent poles via parameter perturbation limits
+- Supports arbitrary-precision arithmetic via BigFloat and complex numbers
 
-Current limitation: only simple-pole cases are implemented. If repeated poles
-would contribute logarithmic terms, a `DomainError` is thrown.
+# Arguments
+- `a`, `b`: complete upper and lower parameter collections (tuple or vector)
+  - `p = length(a)` are the total upper parameters
+  - `q = length(b)` are the total lower parameters
+- `m` (0 ≤ m ≤ q): number of active lower parameters (contributing residues)
+- `n` (0 ≤ n ≤ p): number of active upper parameters
+- `z`: evaluation point (Float64, BigFloat, Complex variants, nonzero)
+
+# Split-parameter form
+`meijerg(a_left, a_right, b_left, b_right, z)` is equivalent to
+```
+meijerg((a_left..., a_right...), (b_left..., b_right...),
+        length(b_left), length(a_left), z)
+```
+
+This follows the standard indexing convention where active top parameters come first,
+active bottom parameters come first, etc.
+
+# See Also
+- `meijerg_reduce`: Wrapper that attempts reduction to special functions, then falls back to this
 """
 function meijerg(a::ParameterInput, b::ParameterInput, m::Integer, n::Integer, z)
     meijerg(_totuple(a), _totuple(b), m, n, z)
@@ -41,8 +57,7 @@ function meijerg(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     0 <= n <= p || throw(ArgumentError("n must satisfy 0 <= n <= length(a)"))
     iszero(z) && throw(DomainError(z, "meijerg is implemented for nonzero z only"))
 
-    a_reduced, b_reduced, m_reduced, n_reduced = _reduce_orders(a, b, m, n)
-    return _meijerg(a_reduced, b_reduced, m_reduced, n_reduced, z)
+    return _meijerg(a, b, m, n, z)
 end
 
 function meijerg(a_left::ParameterInput, a_right::ParameterInput,
@@ -60,11 +75,15 @@ function _meijerg(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     p = length(a)
     q = length(b)
     mode = _expansion_mode(p, q, z)
+    _validate_pairing(a, b, m, n)
+    _has_confluent_poles(a, b, m, n, mode) && return _confluent_expansion(a, b, m, n, z, mode)
+    return _meijerg_simple(a, b, m, n, z, mode)
+end
+
+function _meijerg_simple(a::Tuple, b::Tuple, m::Integer, n::Integer, z, mode::Symbol)
     if mode === :lower
-        _validate_simple_lower(a, b, m, n)
         return _lower_expansion(a, b, m, n, z)
     else
-        _validate_simple_upper(a, b, m, n)
         return _upper_expansion(a, b, m, n, z)
     end
 end
@@ -89,20 +108,8 @@ function _lower_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     p = length(a_promoted)
     q = length(b_promoted)
     argument = _signed_argument(z_promoted, p - m - n)
-    # Parallel evaluate each residue-term independently, then reduce serially.
-    # Allocate a concrete-typed buffer for terms to avoid type-instability
-    # and excessive allocations. Determine an appropriate element type by
-    # promoting the runtime types of the inputs (z and the parameters).
-    types = (typeof(z_promoted),)
-    if p > 0
-        types = (types..., map(typeof, a_promoted)...)
-    end
-    if q > 0
-        types = (types..., map(typeof, b_promoted)...)
-    end
-    term_eltype = length(types) > 1 ? promote_type(types...) : types[1]
-    terms = Vector{term_eltype}(undef, m)
-    Threads.@threads for k in 1:m
+    total = zero(z_promoted)
+    for k in 1:m
         @inbounds begin
             b_k = b_promoted[k]
             α = ntuple(j -> one(b_k) + b_k - a_promoted[j], p)
@@ -113,12 +120,8 @@ function _lower_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
             term /= _gamma_product((a_promoted[j] - b_k for j in n+1:p))
             term *= _pow_meijerg(z_promoted, b_k)
             term *= pFq(α, β, argument)
-            terms[k] = term
+            total += term
         end
-    end
-    total = zero(z_promoted)
-    for k in 1:m
-        total += terms[k]
     end
     return something(total, zero(z_promoted))
 end
@@ -129,20 +132,8 @@ function _upper_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     p = length(a_promoted)
     q = length(b_promoted)
     argument = _signed_argument(inv(z_promoted), q - m - n)
-    # Allocate a concrete-typed buffer for terms to avoid type-instability
-    # and excessive allocations. Determine an appropriate element type by
-    # promoting the runtime types of the inputs (z and the parameters).
-    types = (typeof(z_promoted),)
-    if p > 0
-        types = (types..., map(typeof, a_promoted)...)
-    end
-    if q > 0
-        types = (types..., map(typeof, b_promoted)...)
-    end
-    term_eltype = length(types) > 1 ? promote_type(types...) : types[1]
-    terms = Vector{term_eltype}(undef, n)
-    # Parallel evaluate each residue-term independently, then reduce serially.
-    Threads.@threads for h in 1:n
+    total = zero(z_promoted)
+    for h in 1:n
         @inbounds begin
             a_h = a_promoted[h]
             α = ntuple(j -> one(a_h) - a_h + b_promoted[j], q)
@@ -153,12 +144,8 @@ function _upper_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
             term /= _gamma_product((a_h - b_promoted[j] for j in m+1:q))
             term *= _pow_meijerg(z_promoted, a_h - one(a_h))
             term *= pFq(α, β, argument)
-            terms[h] = term
+            total += term
         end
-    end
-    total = zero(z_promoted)
-    for h in 1:n
-        total += terms[h]
     end
     return something(total, zero(z_promoted))
 end
@@ -185,57 +172,6 @@ function _gamma_product(values)
     return something(result, 1)
 end
 
-function _reduce_orders(a::Tuple, b::Tuple, m::Integer, n::Integer)
-    a_left = collect(a[1:n])
-    a_right = collect(a[n+1:end])
-    b_left = collect(b[1:m])
-    b_right = collect(b[m+1:end])
-
-    changed = true
-    while changed
-        changed = false
-
-        for i in eachindex(a_left)
-            j = findfirst(x -> isequal(x, a_left[i]), b_right)
-            if j !== nothing
-                deleteat!(a_left, i)
-                deleteat!(b_right, j)
-                n -= 1
-                changed = true
-                break
-            end
-        end
-        changed && continue
-
-        for i in eachindex(a_right)
-            j = findfirst(x -> isequal(x, a_right[i]), b_left)
-            if j !== nothing
-                deleteat!(a_right, i)
-                deleteat!(b_left, j)
-                m -= 1
-                changed = true
-                break
-            end
-        end
-    end
-
-    return (Tuple(vcat(a_left, a_right)), Tuple(vcat(b_left, b_right)), m, n)
-end
-
-function _validate_simple_lower(a::Tuple, b::Tuple, m::Integer, n::Integer)
-    _validate_pairing(a, b, m, n)
-    @inbounds for j in 1:m, k in j+1:m
-        _isintegerlike(b[j] - b[k]) && throw(DomainError((b[j], b[k]), "simple-pole lower expansion requires distinct bottom parameters among the first m entries"))
-    end
-end
-
-function _validate_simple_upper(a::Tuple, b::Tuple, m::Integer, n::Integer)
-    _validate_pairing(a, b, m, n)
-    @inbounds for j in 1:n, k in j+1:n
-        _isintegerlike(a[j] - a[k]) && throw(DomainError((a[j], a[k]), "simple-pole upper expansion requires distinct top parameters among the first n entries"))
-    end
-end
-
 function _validate_pairing(a::Tuple, b::Tuple, m::Integer, n::Integer)
     @inbounds for j in 1:n, k in 1:m
         difference = a[j] - b[k]
@@ -254,4 +190,99 @@ _isintegerlike(::Any) = false
 
 function _ispositiveintegerlike(x)
     return _isintegerlike(x) && _realpart(x) > zero(_realpart(x))
+end
+
+function _has_confluent_poles(a::Tuple, b::Tuple, m::Integer, n::Integer, mode::Symbol)
+    if mode === :lower
+        @inbounds for j in 1:m, k in j+1:m
+            _isintegerlike(b[j] - b[k]) && return true
+        end
+    else
+        @inbounds for j in 1:n, k in j+1:n
+            _isintegerlike(a[j] - a[k]) && return true
+        end
+    end
+    return false
+end
+
+function _confluent_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z, mode::Symbol)
+    if _needs_high_precision_confluent(a, b, z)
+        return setprecision(256) do
+            a_big = map(big, a)
+            b_big = map(big, b)
+            z_big = big(z)
+            value_big = _confluent_expansion_impl(a_big, b_big, m, n, z_big, mode)
+            _convert_confluent_result(value_big, a, b, z)
+        end
+    end
+    return _confluent_expansion_impl(a, b, m, n, z, mode)
+end
+
+function _confluent_expansion_impl(a::Tuple, b::Tuple, m::Integer, n::Integer, z, mode::Symbol)
+    eps0 = _confluent_epsilon(a, b, z)
+    steps = (eps0, eps0 / 2, eps0 / 4, eps0 / 8)
+    values = map(steps) do eps
+        a_perturbed, b_perturbed = _perturb_active_parameters(a, b, m, n, eps, mode)
+        _meijerg_simple(a_perturbed, b_perturbed, m, n, z, mode)
+    end
+    return _lagrange_extrapolate_zero(steps, values)
+end
+
+function _perturb_active_parameters(a::Tuple, b::Tuple, m::Integer, n::Integer, eps, mode::Symbol)
+    if mode === :lower
+        b_values = collect(b)
+        center = (m + 1) / 2
+        for j in 1:m
+            b_values[j] = b_values[j] + (j - center) * eps
+        end
+        return a, Tuple(b_values)
+    else
+        a_values = collect(a)
+        center = (n + 1) / 2
+        for j in 1:n
+            a_values[j] = a_values[j] + (j - center) * eps
+        end
+        return Tuple(a_values), b
+    end
+end
+
+function _confluent_epsilon(a::Tuple, b::Tuple, z)
+    magnitudes = map(x -> abs(complex(float(x))), (a..., b..., z))
+    scale = maximum((one(first(magnitudes)), magnitudes...))
+    return sqrt(eps(float(real(scale)))) * scale
+end
+
+function _lagrange_extrapolate_zero(xs::NTuple{N}, ys) where {N}
+    total = zero(first(ys))
+    for i in 1:N
+        weight = one(xs[i])
+        for j in 1:N
+            i == j && continue
+            weight *= -xs[j] / (xs[i] - xs[j])
+        end
+        total += ys[i] * weight
+    end
+    return total
+end
+
+function _needs_high_precision_confluent(a::Tuple, b::Tuple, z)
+    _contains_bigfloat(a) && return false
+    _contains_bigfloat(b) && return false
+    _contains_bigfloat((z,)) && return false
+    return true
+end
+
+_contains_bigfloat(values::Tuple) = any(_isbigfloatlike, values)
+_isbigfloatlike(x::BigFloat) = true
+_isbigfloatlike(x::Complex{BigFloat}) = true
+_isbigfloatlike(::Any) = false
+
+function _convert_confluent_result(value, a::Tuple, b::Tuple, z)
+    a_float = map(float, a)
+    b_float = map(float, b)
+    target_type = typeof(promote(float(z), a_float..., b_float...)[1])
+    if target_type <: Real && value isa Complex
+        return convert(target_type, real(value))
+    end
+    return convert(target_type, value)
 end

@@ -21,24 +21,3 @@ function write_table(path::AbstractString, header::Vector{String}, rows::Vector{
     end
 end
 
-function maybe_plot(path::AbstractString, x, y; xlabel::String, ylabel::String, title::String,
-                    yscale::Symbol = :identity, marker = :circle)
-    try
-        @eval import Plots
-    catch
-        @warn "Plots.jl not available; skipping plot output at $path"
-        return false
-    end
-
-    plt = Plots.plot(x, y;
-        xlabel = xlabel,
-        ylabel = ylabel,
-        title = title,
-        marker = marker,
-        linewidth = 2,
-        legend = false,
-        yscale = yscale,
-    )
-    Plots.savefig(plt, path)
-    return true
-end

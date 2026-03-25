@@ -1,4 +1,5 @@
 using MeijerG
+using Plots
 
 include("common.jl")
 
@@ -25,14 +26,17 @@ function run_complexity_benchmarks()
     order_csv = joinpath(OUTPUT_DIR, "complexity_order.csv")
     write_table(order_csv, ["order_pq", "median_seconds"], rows_order)
 
-    maybe_plot(
-        joinpath(OUTPUT_DIR, "complexity_order.png"),
+    order_plot = Plots.plot(
         first.(rows_order),
-        last.(rows_order),
+        last.(rows_order);
         xlabel = "Order (p=q)",
         ylabel = "Median runtime (s)",
         title = "MeijerG runtime vs order",
+        marker = :circle,
+        linewidth = 2,
+        legend = false,
     )
+    Plots.savefig(order_plot, joinpath(OUTPUT_DIR, "complexity_order.png"))
 
     precisions = [64, 96, 128, 192, 256, 384, 512]
     rows_precision = Tuple{Int, Float64}[]
@@ -51,14 +55,17 @@ function run_complexity_benchmarks()
     precision_csv = joinpath(OUTPUT_DIR, "complexity_precision.csv")
     write_table(precision_csv, ["precision_bits", "median_seconds"], rows_precision)
 
-    maybe_plot(
-        joinpath(OUTPUT_DIR, "complexity_precision.png"),
+    precision_plot = Plots.plot(
         first.(rows_precision),
-        last.(rows_precision),
+        last.(rows_precision);
         xlabel = "BigFloat precision (bits)",
         ylabel = "Median runtime (s)",
         title = "MeijerG runtime vs precision",
+        marker = :circle,
+        linewidth = 2,
+        legend = false,
     )
+    Plots.savefig(precision_plot, joinpath(OUTPUT_DIR, "complexity_precision.png"))
 
     println("Complexity benchmark outputs written to: $OUTPUT_DIR")
     return nothing
