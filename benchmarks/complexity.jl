@@ -71,6 +71,5 @@ function run_complexity_benchmarks()
     return nothing
 end
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    run_complexity_benchmarks()
-end
+run_complexity_benchmarks()
+

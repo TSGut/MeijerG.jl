@@ -8,7 +8,7 @@ Compute the Meijer G-function with automatic reduction to simpler functions and 
 
 This is the **primary public API** and recommended entry point. It combines three strategies:
 1. **Special-case reduction**: Recognizes and reduces to elementary or special functions 
-   (exponential, trigonometric, Bessel K, logarithm, etc.) for known patterns
+    (exponential, trigonometric, Bessel J/K, incomplete gamma, logarithm, etc.) for known patterns
 2. **Confluent-pole handling**: Detects integer-separated parameters that create logarithmic singularities
    and uses parameter perturbation + Lagrange extrapolation for accurate evaluation
 3. **Slater expansion fallback**: For unrecognized inputs, uses pure Slater residue expansions
@@ -37,6 +37,15 @@ sqrt(pi) * meijerg((), (), (0.5,), (0,), 0.1^2/4)
 
 # Bessel K: G_{0,2}^{2,0}(z | - ; ν/2, -ν/2) = 2K_ν(2√z)
 meijerg((), (), (0.4, -0.4), (), 1.0)  # ≈ 2K_{0.8}(2)
+
+# Bessel J: G_{0,2}^{1,0}(z | - ; ν/2, -ν/2) = J_ν(2√z)
+meijerg((), (), (0.4,), (-0.4,), 1.0)  # ≈ J_{0.8}(2)
+
+# Lower incomplete gamma: G_{1,2}^{1,1}(z | 1 ; a, 0) = γ(a,z)
+meijerg((1,), (), (0.7,), (0,), 1.3)  # ≈ γ(0.7, 1.3)
+
+# Upper incomplete gamma: G_{1,2}^{2,1}(z | 1 ; a, 0) = Γ(a,z)
+meijerg((1,), (), (0.7, 0), (), 1.3)  # ≈ Γ(0.7, 1.3)
 
 # Logarithm (1+z): G_{2,2}^{1,2}(z | 1, 1 ; 1, 0) = log(1+z)/z
 meijerg((1, 1), (1, 0), 1, 2, 0.5)  # ≈ log(1.5)/0.5
@@ -126,8 +135,11 @@ This is the core dispatcher for the reduction system. It checks for reduction ru
 2. **Exponential**: `G_{0,1}^{1,0}(z | - ; 0) = exp(-z)`
 3. **Sine**: `G_{0,2}^{1,0}(z | - ; 1/2, 0) = sin(2√z) / √π`
 4. **Cosine**: `G_{0,2}^{1,0}(z | - ; 0, 1/2) = cos(2√z) / √π`
-5. **Bessel K**: `G_{0,2}^{2,0}(z | - ; ν/2, -ν/2) = 2K_ν(2√z)`
-6. **Logarithm (1+z)**: `G_{2,2}^{1,2}(z | 1, 1 ; 1, 0) = log(1+z) / z` (direct evaluation via `log1p`)
+5. **Bessel J**: `G_{0,2}^{1,0}(z | - ; ν/2, -ν/2) = J_ν(2√z)`
+6. **Bessel K**: `G_{0,2}^{2,0}(z | - ; ν/2, -ν/2) = 2K_ν(2√z)`
+7. **Lower incomplete gamma**: `G_{1,2}^{1,1}(z | 1 ; a, 0) = γ(a,z)`
+8. **Upper incomplete gamma**: `G_{1,2}^{2,1}(z | 1 ; a, 0) = Γ(a,z)`
+9. **Logarithm (1+z)**: `G_{2,2}^{1,2}(z | 1, 1 ; 1, 0) = log(1+z) / z` (direct evaluation via `log1p`)
 
 Returns `nothing` if no rule matches (caller will fall back to full `meijerg` evaluation).
 """
@@ -158,11 +170,32 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
         return cos(2 * sqrt(z_promoted)) * _inv_sqrt_pi(z_promoted)
     end
 
+    # G_{0,2}^{1,0}(z | - ; ν/2, -ν/2) = J_ν(2sqrt(z))
+    if a === () && m == 1 && n == 0 && length(b) == 2 && isequal(b[2], -b[1])
+        z_promoted = float(z)
+        ν = float(b[1] - b[2])
+        return besselj(ν, 2 * sqrt(z_promoted))
+    end
+
     # G_{0,2}^{2,0}(z | - ; ν/2, -ν/2) = 2K_ν(2sqrt(z))
     if a === () && m == 2 && n == 0 && length(b) == 2 && isequal(b[2], -b[1])
         z_promoted = float(z)
         ν = float(b[1] - b[2])
         return 2 * besselk(ν, 2 * sqrt(z_promoted))
+    end
+
+    # G_{1,2}^{1,1}(z | 1 ; a, 0) = γ(a,z)
+    if n == 1 && m == 1 && _tuple_isequal(a, (1,)) && length(b) == 2 && isequal(b[2], zero(b[2]))
+        z_promoted = float(z)
+        α = float(b[1])
+        return gamma(α) - gamma(α, z_promoted)
+    end
+
+    # G_{1,2}^{2,1}(z | 1 ; a, 0) = Γ(a,z)
+    if n == 1 && m == 2 && _tuple_isequal(a, (1,)) && length(b) == 2 && isequal(b[2], zero(b[2]))
+        z_promoted = float(z)
+        α = float(b[1])
+        return gamma(α, z_promoted)
     end
 
     # Logarithmic confluent poles: G_{2,2}^{1,2}(z | 1, 1 ; 1, 0)

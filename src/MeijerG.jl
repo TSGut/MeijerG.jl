@@ -1,7 +1,7 @@
 module MeijerG
 
 using HypergeometricFunctions: pFq
-using SpecialFunctions: gamma, besselk, loggamma, logabsgamma
+using SpecialFunctions: gamma, besselj, besselk, loggamma, logabsgamma
 
 export meijerg, meijerg_slater
 
