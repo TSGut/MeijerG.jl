@@ -8,7 +8,7 @@ from the Mellin–Barnes contour integral representation. See
 
 ## Definition
 
-The Meijer G-function is defined by the Mellin–Barnes contour integral (DLMF §16.17):
+The Meijer G-function is defined by the Mellin–Barnes contour integral ([DLMF §16.17](https://dlmf.nist.gov/16.17)):
 
 ```math
 G_{p,q}^{m,n}\left(z\;\middle|\;\begin{matrix}a_1,\dots,a_p\\b_1,\dots,b_q\end{matrix}\right)
@@ -33,7 +33,7 @@ same residue representation, which recovers the finite logarithmic contribution.
 ## Slater's lower expansion
 
 When $p < q$, or when $p = q$ and $|z| \le 1$, the contour is closed around
-the poles of $\Gamma(b_j - s)$ for $j=1,\dots,m$. This yields (DLMF 16.17.2):
+the poles of $\Gamma(b_j - s)$ for $j=1,\dots,m$. This yields ([DLMF §16.17.2](https://dlmf.nist.gov/16.17.2)):
 
 ```math
 \boxed{G_{p,q}^{m,n}\left(z\,\middle|\,\mathbf{a};\,\mathbf{b}\right)
