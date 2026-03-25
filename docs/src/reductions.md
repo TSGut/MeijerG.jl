@@ -146,13 +146,6 @@ result = meijerg_reduce(a, b, 1, 1, z)
 result = meijerg(a, b, 1, 1, z)
 ```
 
-## Comparison: `meijerg` vs `meijerg_reduce`
-
-| Aspect | `meijerg` | `meijerg_reduce` |
-|--------|-----------|------------------|
-| **Always reduces?** | No | Yes (when possible) |
-| **Speed for special cases** | Slower | Faster (direct formula) |
-
 
 ## What about the many G → hypergeometric reductions?
 
