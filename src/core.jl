@@ -72,7 +72,9 @@ end
 _expansion_mode(p::Integer, q::Integer, z) = p < q ? :lower : p > q ? :upper : abs(z) <= one(abs(z)) ? :lower : :upper
 
 function _promote_inputs(a::Tuple, b::Tuple, z)
-    promoted = promote(z, a..., b...)
+    a_float = map(float, a)
+    b_float = map(float, b)
+    promoted = promote(float(z), a_float..., b_float...)
     p = length(a)
     q = length(b)
     z_promoted = promoted[1]
