@@ -23,6 +23,12 @@
             @test result_big isa BigFloat
             # BigFloat mapped-log value matches the analytic reference.
             @test result_big ≈ expected_big atol=big"1e-30" rtol=big"1e-30"
+
+            z_complex = 0.3 + 0.2im
+            result_complex = meijerg((1.0, 1.0), (1.0, 0.0), 1, 2, z_complex)
+            expected_complex = log1p(z_complex) / z_complex
+            # Complex mapped-log value matches the analytic reference.
+            @test result_complex ≈ expected_complex atol=1e-11 rtol=1e-11
         end
 
         @testset "Confluent expansion consistency" begin

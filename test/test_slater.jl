@@ -29,6 +29,10 @@ end
         for z in (0.3, 1.0, 2.5)
             @test meijerg_slater((), (0.0,), 1, 0, z) ≈ exp(-z) atol=1e-12 rtol=1e-12
         end
+
+        zc = 0.6 + 0.4im
+        # Exponential identity also holds for complex input.
+        @test meijerg_slater((), (0.0,), 1, 0, zc) ≈ exp(-zc) atol=1e-11 rtol=1e-11
     end
 
     @testset "Sine" begin
@@ -165,5 +169,21 @@ end
             # Slater upper expansion matches explicit 3F4-form reduction.
             @test lhs ≈ rhs atol=1e-11 rtol=1e-11
         end
+    end
+
+    @testset "Complex z consistency" begin
+        z_lower = 0.45 + 0.30im
+        lhs_lower = meijerg_slater((2.3,), (0.4, 1.7), 1, 0, z_lower)
+        rhs_lower = z_lower^0.4 * pFq((1 + 0.4 - 2.3,), (1 + 0.4 - 1.7,), z_lower) /
+                    (gamma(2.3 - 0.4) * gamma(1 + 0.4 - 1.7))
+        # Lower one-term pFq reduction remains valid for complex z.
+        @test lhs_lower ≈ rhs_lower atol=1e-11 rtol=1e-11
+
+        z_upper = 1.8 + 0.5im
+        lhs_upper = meijerg_slater((0.6, 1.8), (0.2,), 0, 1, z_upper)
+        rhs_upper = z_upper^(0.6 - 1) * pFq((1 - 0.6 + 0.2,), (1 - 0.6 + 1.8,), inv(z_upper)) /
+                    (gamma(0.6 - 0.2) * gamma(1 - 0.6 + 1.8))
+        # Upper one-term pFq reduction remains valid for complex z.
+        @test lhs_upper ≈ rhs_upper atol=1e-11 rtol=1e-11
     end
 end

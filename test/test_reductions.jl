@@ -39,6 +39,13 @@ using HypergeometricFunctions: pFq
         @test v_big isa BigFloat
         # BigFloat value matches exponential reference.
         @test v_big ≈ exp(x_big) atol=big"1e-30" rtol=big"1e-30"
+
+        z_complex = 0.2 + 0.3im
+        v_complex = meijerg((), (0.0,), 1, 0, z_complex)
+        # Complex input returns complex output.
+        @test v_complex isa ComplexF64
+        # Complex exponential identity is preserved.
+        @test v_complex ≈ exp(-z_complex) atol=1e-11 rtol=1e-11
     end
 
     @testset "Logarithmic special cases" begin
@@ -227,5 +234,27 @@ end
             # Public API and Slater agree on the same pFq case.
             @test lhs ≈ slater atol=1e-12 rtol=1e-12
         end
+    end
+
+    @testset "Complex z consistency" begin
+        z_lower = 0.45 + 0.30im
+        lhs_lower = meijerg((2.3,), (0.4, 1.7), 1, 0, z_lower)
+        rhs_lower = z_lower^0.4 * pFq((1 + 0.4 - 2.3,), (1 + 0.4 - 1.7,), z_lower) /
+                    (gamma(2.3 - 0.4) * gamma(1 + 0.4 - 1.7))
+        slater_lower = meijerg_slater((2.3,), (0.4, 1.7), 1, 0, z_lower)
+        # Public API matches lower one-term pFq reduction for complex z.
+        @test lhs_lower ≈ rhs_lower atol=1e-11 rtol=1e-11
+        # Public API and Slater agree on the same complex lower-mode case.
+        @test lhs_lower ≈ slater_lower atol=1e-12 rtol=1e-12
+
+        z_upper = 1.8 + 0.5im
+        lhs_upper = meijerg((0.6, 1.8), (0.2,), 0, 1, z_upper)
+        rhs_upper = z_upper^(0.6 - 1) * pFq((1 - 0.6 + 0.2,), (1 - 0.6 + 1.8,), inv(z_upper)) /
+                    (gamma(0.6 - 0.2) * gamma(1 - 0.6 + 1.8))
+        slater_upper = meijerg_slater((0.6, 1.8), (0.2,), 0, 1, z_upper)
+        # Public API matches upper one-term pFq reduction for complex z.
+        @test lhs_upper ≈ rhs_upper atol=1e-11 rtol=1e-11
+        # Public API and Slater agree on the same complex upper-mode case.
+        @test lhs_upper ≈ slater_upper atol=1e-12 rtol=1e-12
     end
 end
