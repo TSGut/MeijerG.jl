@@ -11,6 +11,7 @@ DocMeta.setdocmeta!(MeijerG, :DocTestSetup, :(using MeijerG); recursive=true)
 makedocs(
     modules = [MeijerG],
     sitename = "MeijerG.jl",
+    checkdocs = :exports,
     format = Documenter.HTML(prettyurls = get(ENV, "CI", "false") == "true"),
     pages = [
         "Home" => "index.md",
