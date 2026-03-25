@@ -21,7 +21,7 @@ it easy to trace each group of checks to mathematical or software references.
     equivalence, and near-`|z|=1` branch-switch smoke tests
   - Sources:
     - DLMF §16.17 contour/series regime split
-    - Implementation contract in `src/core.jl`
+    - Implementation contract in `src/slater.jl`
 - `test_high_precision_references.jl`
   - BigFloat checks and fixed numerical references
   - Sources:

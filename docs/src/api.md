@@ -2,21 +2,21 @@
 
 ## Main Functions
 
-### Pure Evaluation
+### Recommended API
 
 ```@docs
 meijerg
 ```
 
-### Reduction with Special Cases
+### Pure Slater Evaluation
 
 ```@docs
-meijerg_reduce
+meijerg_slater
 ```
 
 ## Calling Conventions
 
-Both `meijerg` and `meijerg_reduce` support two calling styles:
+Both `meijerg` and `meijerg_slater` support two calling styles:
 
 ### Full-parameter form
 ```julia
@@ -30,3 +30,6 @@ result = meijerg(a_left, a_right, b_left, b_right, z)
 ```
 Equivalent to `meijerg((a_left..., a_right...), (b_left..., b_right...), 
                         length(b_left), length(a_left), z)`
+
+`meijerg` is the default user-facing function. It applies explicit reductions when available,
+uses perturbation for confluent-pole cases, and otherwise delegates to `meijerg_slater`.

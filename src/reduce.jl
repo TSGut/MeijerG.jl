@@ -1,19 +1,17 @@
 @doc raw"""
-    meijerg_reduce(a, b, m, n, z)
-    meijerg_reduce(a_left, a_right, b_left, b_right, z)
+    meijerg(a, b, m, n, z)
+    meijerg(a_left, a_right, b_left, b_right, z)
 
-Compute the Meijer G-function with explicit reductions to simpler functions for known special cases.
+Compute the Meijer G-function with automatic reduction to simpler functions and confluent-pole handling.
 
 # Overview
 
-This function attempts to recognize and reduce the Meijer G-function to elementary or special functions
-(exponential, trigonometric, Bessel K, etc.). If no reduction rule applies, it delegates to the
-full `meijerg(...)` evaluator.
-
-The reduction system handles:
-- **Order cancellation**: Annihilate matching parameters across left/right partitions
-- **Elementary identities**: Exponential, sine, cosine, Bessel-K functions
-- **Fallback**: Full Meijer G-function for unrecognized inputs
+This is the **primary public API** and recommended entry point. It combines three strategies:
+1. **Special-case reduction**: Recognizes and reduces to elementary or special functions 
+   (exponential, trigonometric, Bessel K, logarithm, etc.) for known patterns
+2. **Confluent-pole handling**: Detects integer-separated parameters that create logarithmic singularities
+   and uses parameter perturbation + Lagrange extrapolation for accurate evaluation
+3. **Slater expansion fallback**: For unrecognized inputs, uses pure Slater residue expansions
 
 # Arguments
 - `a`, `b`: complete upper and lower parameter collections (tuple/vector form)
@@ -21,8 +19,8 @@ The reduction system handles:
 - `z`: evaluation point (any Julia number type: Float64, BigFloat, Complex, etc.)
 
 # Alternative signature
-The split-parameter form `meijerg_reduce(a_left, a_right, b_left, b_right, z)` is equivalent to
-`meijerg_reduce((a_left..., a_right...), (b_left..., b_right...), length(b_left), length(a_left), z)`.
+The split-parameter form `meijerg(a_left, a_right, b_left, b_right, z)` is equivalent to
+`meijerg((a_left..., a_right...), (b_left..., b_right...), length(b_left), length(a_left), z)`.
 This convention follows the standard notation where `n = |a_left|` and `m = |b_left|`.
 
 # Returns
@@ -32,40 +30,89 @@ Supports arbitrary precision via `BigFloat` and complex arguments.
 # Examples
 ```julia
 # Exponential: G_{0,1}^{1,0}(z | - ; 0) = exp(-z)
-meijerg_reduce((), (), (0,), (), -0.5)  # ≈ exp(0.5)
+meijerg((), (), (0,), (), -0.5)  # ≈ exp(0.5)
 
 # Sine: √π · G_{0,2}^{1,0}(z | - ; 1/2, 0) = sin(2√z)
-sqrt(pi) * meijerg_reduce((), (), (0.5,), (0,), 0.1^2/4)
+sqrt(pi) * meijerg((), (), (0.5,), (0,), 0.1^2/4)
 
 # Bessel K: G_{0,2}^{2,0}(z | - ; ν/2, -ν/2) = 2K_ν(2√z)
-meijerg_reduce((), (), (0.4, -0.4), (), 1.0)  # ≈ 2K_{0.8}(2)
+meijerg((), (), (0.4, -0.4), (), 1.0)  # ≈ 2K_{0.8}(2)
 
-# Fallback to full evaluation (no special case)
-meijerg_reduce((0.3, 0.8), (0.2, 1.1), 1, 1, 0.7)
+# Logarithm (1+z): G_{2,2}^{1,2}(z | 1, 1 ; 1, 0) = log(1+z)/z
+meijerg((1, 1), (1, 0), 1, 2, 0.5)  # ≈ log(1.5)/0.5
+
+# Confluent-pole case: automatic perturbation handling
+meijerg((), (), (1.5, 0.5), (), z)  # Integer difference detected, uses perturbation
+
+# Generic input: falls back to Slater expansion
+meijerg((0.3, 0.8), (0.2, 1.1), 1, 1, 0.7)
 ```
 
 # See Also
-- `meijerg`: Always uses the full residue-expansion evaluator
+- `meijerg_slater`: Pure Slater residue expansion (power users, no reductions and unsafe for confluent poles)
 """
-function meijerg_reduce(a::ParameterInput, b::ParameterInput, m::Integer, n::Integer, z)
-    meijerg_reduce(_totuple(a), _totuple(b), m, n, z)
+function meijerg(a::ParameterInput, b::ParameterInput, m::Integer, n::Integer, z)
+    meijerg(_totuple(a), _totuple(b), m, n, z)
 end
 
-function meijerg_reduce(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
+function meijerg(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
+    p = length(a)
+    q = length(b)
+    0 <= m <= q || throw(ArgumentError("m must satisfy 0 <= m <= length(b)"))
+    0 <= n <= p || throw(ArgumentError("n must satisfy 0 <= n <= length(a)"))
+    iszero(z) && throw(DomainError(z, "meijerg is implemented for nonzero z only"))
+    
+    # Step 1: Check for special-case reductions
     reduced = _reduce_special_case(a, b, m, n, z)
-    reduced === nothing && return meijerg(a, b, m, n, z)
-    return reduced
+    if reduced !== nothing
+        return reduced
+    end
+    
+    # Step 2: Check for confluent poles and use perturbation if needed
+    mode = _expansion_mode(p, q, z)
+    if _has_confluent_poles(a, b, m, n, mode)
+        return _meijerg_perturb(a, b, m, n, z)
+    end
+    
+    # Step 3: Fall back to pure Slater expansion
+    return meijerg_slater(a, b, m, n, z)
 end
 
-function meijerg_reduce(a_left::ParameterInput, a_right::ParameterInput,
-                        b_left::ParameterInput, b_right::ParameterInput, z)
+function meijerg(a_left::ParameterInput, a_right::ParameterInput,
+                 b_left::ParameterInput, b_right::ParameterInput, z)
     a_left_tuple = _totuple(a_left)
     a_right_tuple = _totuple(a_right)
     b_left_tuple = _totuple(b_left)
     b_right_tuple = _totuple(b_right)
     a = (a_left_tuple..., a_right_tuple...)
     b = (b_left_tuple..., b_right_tuple...)
-    return meijerg_reduce(a, b, length(b_left_tuple), length(a_left_tuple), z)
+    return meijerg(a, b, length(b_left_tuple), length(a_left_tuple), z)
+end
+
+"""
+    _has_confluent_poles(a::Tuple, b::Tuple, m::Integer, n::Integer, mode::Symbol)
+
+Detect if the Meijer G-function input exhibits confluent poles.
+
+Confluent poles arise when active parameters have integer differences, creating logarithmic
+singularities in the residue expansion. Detection depends on expansion mode:
+- **Lower expansion** (p < q): Check for integer differences in active lower parameters `b[1:m]`
+- **Upper expansion** (p > q): Check for integer differences in active upper parameters `a[1:n]`
+
+# Returns
+`true` if confluent poles detected, `false` otherwise.
+"""
+function _has_confluent_poles(a::Tuple, b::Tuple, m::Integer, n::Integer, mode::Symbol)
+    if mode === :lower
+        @inbounds for j in 1:m, k in j+1:m
+            _isintegerlike(b[j] - b[k]) && return true
+        end
+    else
+        @inbounds for j in 1:n, k in j+1:n
+            _isintegerlike(a[j] - a[k]) && return true
+        end
+    end
+    return false
 end
 
 """
@@ -80,6 +127,7 @@ This is the core dispatcher for the reduction system. It checks for reduction ru
 3. **Sine**: `G_{0,2}^{1,0}(z | - ; 1/2, 0) = sin(2√z) / √π`
 4. **Cosine**: `G_{0,2}^{1,0}(z | - ; 0, 1/2) = cos(2√z) / √π`
 5. **Bessel K**: `G_{0,2}^{2,0}(z | - ; ν/2, -ν/2) = 2K_ν(2√z)`
+6. **Logarithm (1+z)**: `G_{2,2}^{1,2}(z | 1, 1 ; 1, 0) = log(1+z) / z` (direct evaluation via `log1p`)
 
 Returns `nothing` if no rule matches (caller will fall back to full `meijerg` evaluation).
 """
@@ -89,7 +137,7 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     reduced_orders = _reduce_orders(a, b, m, n)
     if reduced_orders !== nothing
         a_reduced, b_reduced, m_reduced, n_reduced = reduced_orders
-        return meijerg_reduce(a_reduced, b_reduced, m_reduced, n_reduced, z)
+        return meijerg(a_reduced, b_reduced, m_reduced, n_reduced, z)
     end
 
     # G_{0,1}^{1,0}(z | - ; 0) = exp(-z)
@@ -115,6 +163,20 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
         z_promoted = float(z)
         ν = float(b[1] - b[2])
         return 2 * besselk(ν, 2 * sqrt(z_promoted))
+    end
+
+    # Logarithmic confluent poles: G_{2,2}^{1,2}(z | 1, 1 ; 1, 0)
+    # Maps to log(1+z) / z via parameter perturbation limit (Gradshteyn & Ryzhik 9.353, DLMF 15.8.2)
+    # Direct computation avoids expensive 4× evaluation + Lagrange extrapolation
+    if length(a) == 2 && length(b) == 2 && m == 1 && n == 2 && 
+       _tuple_isequal(a, (1, 1)) && _tuple_isequal(b, (1, 0))
+        z_promoted = float(z)
+        # Avoid division by zero; use log1p for accuracy
+        if iszero(z_promoted)
+            return z_promoted
+        else
+            return log1p(z_promoted) / z_promoted
+        end
     end
 
     return nothing

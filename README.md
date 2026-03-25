@@ -14,10 +14,14 @@ and supports **arbitrary Julia numeric types**: pass `Float64` for standard
 double precision or `BigFloat` (with any precision) for arbitrary-precision
 results.
 
+The recommended entry point is `meijerg(...)`, which applies explicit reductions for recognized
+special cases, uses perturbation for confluent-pole configurations, and otherwise falls back to
+the pure residue evaluator `meijerg_slater(...)`.
+
 The Meijer G-function is defined by the Mellin–Barnes integral
 
 $$
-G_{p,q}^{m,n}\left(z \hspace{2mm} \left| {a_1,\dots,a_p}\atop{b_1,\dots,b_q}\right) \right.
+G_{p,q}^{m,n}\left(z \hspace{1mm} \left| {a_1,\dots,a_p}\atop{b_1,\dots,b_q}\right) \right.
 = \frac{1}{2\pi i}\int_{\mathcal{L}}
 \frac{\prod_{j=1}^{m}\Gamma(b_j-s)\prod_{j=1}^{n}\Gamma(1-a_j+s)}
   {\prod_{j=m+1}^{q}\Gamma(1-b_j+s)\prod_{j=n+1}^{p}\Gamma(a_j-s)}
@@ -67,6 +71,9 @@ end
 
 # Split-parameter form: G_{2,2}^{1,1}(z | a_L, a_R ; b_L, b_R)
 meijerg((0.25,), (1.75,), (0.5,), (1.25,), 2.0)
+
+# Power-user API: pure Slater residue evaluation, no reductions or perturbation
+meijerg_slater((0.25,), (1.75,), (0.5,), (1.25,), 2.0)
 ```
 
 ---
@@ -84,6 +91,9 @@ parameter vectors (or tuples), `m` and `n` are the Meijer G indices
 satisfying `0 ≤ m ≤ length(b)` and `0 ≤ n ≤ length(a)`, and `z` is the
 evaluation point.
 
+This is the recommended user-facing API. It applies explicit reductions to simpler functions when
+available, uses perturbation for confluent-pole cases, and otherwise delegates to `meijerg_slater`.
+
 ### `meijerg(a_left, a_right, b_left, b_right, z)`
 
 ```
@@ -96,6 +106,15 @@ are assembled as `a = [a_left; a_right]` and `b = [b_left; b_right]`.
 
 Both forms accept `Tuple` or `AbstractVector` for the parameter arguments.
 
+### `meijerg_slater(a, b, m, n, z)`
+
+```
+meijerg_slater(a, b, m, n, z) -> Number
+```
+
+Pure Slater residue evaluation with no explicit reductions and no perturbation handling.
+This is intended for advanced users who want direct access to the residue-expansion algorithm.
+
 **Type promotion.** All parameters and `z` are promoted to a common type via
 Julia's standard `promote` mechanism before any computation, so mixing
 `Float64` and `BigFloat` inputs works as expected.
@@ -104,9 +123,11 @@ Julia's standard `promote` mechanism before any computation, so mixing
 
 ## Current Limitations
 
-- **Confluent poles supported via limits.** When parameters in the active
-  residue family differ by integers, logarithmic terms appear in Slater's
-  expansion. These cases are handled through a stable perturbation limit of the
+- **Confluent poles in `meijerg`.** When parameters in the active residue family
+  differ by integers, logarithmic terms appear in Slater's expansion. The public
+  `meijerg` API handles these cases through a stable perturbation limit of the
   residue sum.
+- **`meijerg_slater` is literal.** The pure Slater API does not perform perturbation
+  or reductions; it evaluates the raw residue expansion directly.
 - **Non-zero argument.** $z = 0$ is not supported and raises a `DomainError`.
 

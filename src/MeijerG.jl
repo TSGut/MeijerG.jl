@@ -1,11 +1,12 @@
 module MeijerG
 
 using HypergeometricFunctions: pFq
-using SpecialFunctions: gamma, besselk
+using SpecialFunctions: gamma, besselk, loggamma, logabsgamma
 
-export meijerg, meijerg_reduce
+export meijerg, meijerg_slater
 
-include("core.jl")
+include("slater.jl")
+include("perturb.jl")
 include("reduce.jl")
 
 end

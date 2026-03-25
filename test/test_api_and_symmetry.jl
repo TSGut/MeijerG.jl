@@ -2,12 +2,14 @@
     @testset "Index form matches split form" begin
         value1 = meijerg((0.25, 1.75), (0.5, 1.25), 1, 1, 0.5)
         value2 = meijerg((0.25,), (1.75,), (0.5,), (1.25,), 0.5)
+        # Index and split signatures agree.
         @test value1 ≈ value2 atol=1e-12 rtol=1e-12
     end
 
     @testset "Vector and tuple arguments agree" begin
         a = [0.25, 1.75]
         b = [0.5, 1.25]
+        # Vector and tuple inputs produce same value.
         @test meijerg(a, b, 1, 1, 0.5) ≈ meijerg(tuple(a...), tuple(b...), 1, 1, 0.5) atol=1e-12 rtol=1e-12
     end
 
@@ -17,6 +19,7 @@
         z = 0.5
         lhs = meijerg(a, b, 1, 1, z)
         rhs = meijerg(Tuple(1 .- b), Tuple(1 .- a), 1, 1, inv(z))
+        # Inversion identity is satisfied.
         @test lhs ≈ rhs atol=1e-11 rtol=1e-11
     end
 
@@ -37,6 +40,7 @@
         for (a, b, z) in cases
             v_index = meijerg(a, b, 1, 1, z)
             v_split = meijerg((a[1],), (a[2],), (b[1],), (b[2],), z)
+            # Stress case keeps split/index consistency.
             @test v_index ≈ v_split atol=1e-11 rtol=1e-11
         end
     end
