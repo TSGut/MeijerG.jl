@@ -1,0 +1,25 @@
+name = "MeijerG"
+uuid = "c1979943-378d-4dac-9c37-200771e290c3"
+version = "0.1.0"
+authors = ["Timon S. Gutleb"]
+
+[deps]
+ClassicalOrthogonalPolynomials = "b30e2e7b-c4ee-47da-9d5f-2c5c27239acd"
+HypergeometricFunctions = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
+QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+
+[compat]
+ClassicalOrthogonalPolynomials = "0.15.16"
+HypergeometricFunctions = "0.3.28"
+QuadGK = "2.11.2"
+Random = "1.11.0"
+SpecialFunctions = "2.7.2"
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

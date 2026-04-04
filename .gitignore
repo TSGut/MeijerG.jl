@@ -1,0 +1,44 @@
+# Ignore any directory named `output`, `rational_spiral_animation` or 'coverage' anywhere in the tree
+**/output/
+**/coverage/
+**/rational_spiral_animation
+
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*~
+*.swo
+
+# Julia
+.julia/
+*.ji
+*.ji.*
+*.jl~
+*.jl.cov
+*.jld
+*.jld2
+*.jld3
+.cache/
+
+# Build/artifact products
+/deps/
+/artifacts/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Ignore build folder in docs
+docs/build/
