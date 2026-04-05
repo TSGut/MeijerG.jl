@@ -26,15 +26,27 @@ try
   meijerg((), (1, 0), 2, 0, -1.0)
 catch err
   typeof(err)
-end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">DomainError</code></pre><p>For Meijer G, pass complex input explicitly when you want the complex branch:</p><pre><code class="language-julia hljs">using MeijerG
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">DomainError</code></pre><p>Pass complex input explicitly when you want the complex branch:</p><pre><code class="language-julia hljs">using MeijerG
 
 meijerg((), (1, 0), 2, 0, -1.0 + 0im)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-0.33625230062486183 + 1.811834419191979im</code></pre><h2 id="Logo"><a class="docs-heading-anchor" href="#Logo">Logo</a><a id="Logo-1"></a><a class="docs-heading-anchor-permalink" href="#Logo" title="Permalink"></a></h2><pre><code class="language-julia hljs">using MeijerG, ComplexPhasePortrait, ColorSchemes, Images
-viridis_colormap = [RGB(c.r, c.g, c.b) for c in ColorSchemes.viridis.colors];
+
+# Define periodic viridis colormap
+function periodic_colormap(colors)
+  base = [RGB(c.r, c.g, c.b) for c in colors]
+  return vcat(base, base[end-1:-1:2])
+end
+viridis_colormap = periodic_colormap(ColorSchemes.viridis.colors)
+
+# Evaluation grid and target function
 xs = range(-5.0, 5.0; length=1000)
 ys = range(-5.0, 5.0; length=1000)
 Z  = [x + im*y for y in ys, x in xs]
 f(z) = meijerg((1/2,1/2,-1/4,3.0), (0.0,1/2,5,-3/2), 2, 1, z)
+
+# Generate image
 img = Images.clamp01nan.(portrait(f.(Z), PTcgrid, colormap=viridis_colormap))
+
+# Apply a simple disk mask
 h, w = size(img)
 cy, cx = (h + 1) / 2, (w + 1) / 2
 r2 = (min(h, w) / 2)^2
@@ -42,4 +54,6 @@ disk_logo = [
   (x - cx)^2 + (y - cy)^2 &lt;= r2 ? RGBA(img[y, x], 1) : RGBA(1, 1, 1, 0)
   for y in 1:h, x in 1:w
 ]
-save(&quot;assets/logo.png&quot;, disk_logo);</code></pre></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="math/">Mathematical Notes »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Saturday 4 April 2026 21:41">Saturday 4 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+
+# Save an deploy logo
+save(&quot;assets/logo.png&quot;, disk_logo);</code></pre></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="math/">Mathematical Notes »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 00:18">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
