@@ -28,20 +28,20 @@ The default algorithm uses **special-case reductions** when available, **Slater 
 <table>
 <tr>
 <td colspan="2" align="center">
-Complex phase portraits of $G_{3,3}^{2,1}\!\left(z\,\middle|\,\frac{1}{7}+0.22\cos(2\pi t),\frac{2}{7},\frac{4}{7};\frac{3}{7},\frac{5}{7},\frac{6}{7}\right)$ for $t \in [0,1)$
+Complex phase portraits of $G_{3,3}^{2,1}\!\left(z\,\middle|\,\frac{1}{7}+0.2\cos(2\pi t),\frac{2}{7},\frac{4}{7};\frac{3}{7},\frac{5}{7},\frac{6}{7}\right)$ for $t \in [0,1)$
 </td>
 </tr>
 <tr>
 <td align="center">
-<img src="https://raw.githubusercontent.com/TSGut/tsgut.github.io/main/images/meijerg_animation_nist.webp" alt="NIST Standard Animation" width="400" />
+<img src="https://raw.githubusercontent.com/TSGut/tsgut.github.io/main/images/meijerg_animation_nist.gif" alt="NIST Standard Animation" width="400" />
 </td>
 <td align="center">
-<img src="https://raw.githubusercontent.com/TSGut/tsgut.github.io/main/images/meijerg_animation_viridis.webp" alt="Viridis Animation" width="400" />
+<img src="https://raw.githubusercontent.com/TSGut/tsgut.github.io/main/images/meijerg_animation_viridis.gif" alt="Viridis (Periodic) Animation" width="400" />
 </td>
 </tr>
 <tr>
 <td align="center"><strong>NIST Standard</strong></td>
-<td align="center"><strong>Viridis</strong></td>
+<td align="center"><strong>Viridis (Periodic)</strong></td>
 </tr>
 </table>
 
@@ -127,7 +127,7 @@ Both forms accept `Tuple` or `AbstractVector` for the parameter arguments.
 
 ## Power-user API
 
-```text
+```julia
 meijerg_slater(a, b, m, n, z) -> Number
 meijerg_slater(a_left, a_right, b_left, b_right, z) -> Number
 ```
@@ -135,7 +135,7 @@ meijerg_slater(a_left, a_right, b_left, b_right, z) -> Number
 Pure Slater residue evaluation without reductions or perturbation. This will fail on confluent-pole cases (e.g., integer-separated parameters). Use only when you 
 specifically want raw Slater residue sums.
 
-```text
+```julia
 meijerg_contour(a, b, m, n, z; kwargs...) -> Number
 meijerg_contour(a_left, a_right, b_left, b_right, z; kwargs...) -> Number
 ```

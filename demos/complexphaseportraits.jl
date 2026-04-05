@@ -8,8 +8,13 @@ xs = range(-5.0, 5.0; length=1000)
 ys = range(-5.0, 5.0; length=1000)
 Z  = [x + im*y for y in ys, x in xs]
 
-# Custom colormap (using Viridis)
-viridis_colormap = [RGB(c.r, c.g, c.b) for c in ColorSchemes.viridis.colors];
+# Build a periodic Viridis-style colormap so the phase wrap closes continuously.
+function periodic_colormap(colors)
+	base = [RGB(c.r, c.g, c.b) for c in colors]
+	return vcat(base, base[end-1:-1:2])
+end
+
+viridis_colormap = periodic_colormap(ColorSchemes.viridis.colors)
 
 # Ensure output folder exists (relative to this script)
 figures_dir = joinpath(@__DIR__, "figures")
@@ -24,8 +29,8 @@ save(joinpath(figures_dir, "bessel_phase_viridis.png"), img2);
 
 # 2. Confluent-pole exotic Meijer G
 f_confluent(z) = meijerg((1/2,1/2,-1/4,3.0), (0.0,1/2,5,-3/2), 2, 1, z)
-img3 = portrait(f_confluent.(Z), PTcgrid)
-img4 = portrait(f_confluent.(Z), PTcgrid, colormap=viridis_colormap)
+img3 = portrait(f_confluent.(Z), PTcgrid);
+img4 = portrait(f_confluent.(Z), PTcgrid, colormap=viridis_colormap);
 save(joinpath(figures_dir, "confluent_phase.png"), map(clamp01nan,img3));
 save(joinpath(figures_dir, "confluent_phase_viridis.png"), map(clamp01nan,img4));
 

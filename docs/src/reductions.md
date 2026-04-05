@@ -34,36 +34,17 @@ Otherwise, `meijerg` delegates to `meijerg_slater` for pure residue evaluation.
 
 ## Category 1: Order Cancellation
 
-When parameters appear in both "left side" and "right side" of the Meijer G-function,
-they cancel identically in the mathematical definition.
+When parameters appear in opposite active/inactive partitions, the corresponding
+$\Gamma$ factors cancel identically before evaluation.
 
-Specifically:
-- If $a_i \in \{a_{\text{right}}\}$ and $a_i \in \{b_{\text{left}}\}$, they cancel
-- If $a_i \in \{a_{\text{left}}\}$ and $a_i \in \{b_{\text{right}}\}$, they cancel
+- If $a_k = b_j$ for some $k \le n$ and $j > m$, remove both parameters and decrement $(p, q, n)$ by one.
+- If $a_k = b_j$ for some $k > n$ and $j \le m$, remove both parameters and decrement $(p, q, m)$ by one.
 
-The reduced order is computed recursively, so multiple cascades are handled correctly.
-
-### Example
-
-```julia
-# G_{2,2}^{1,1}(z | 1.0, 0.25 ; 0.25, 1.0)
-# a_left = (1.0), a_right = (0.25)
-# b_left = (0.25), b_right = (1.0)
-#
-# Match: a_left[1] = b_right[1] = 1.0  → cancel
-# Match: a_right[1] = b_left[1] = 0.25 → cancel (after first reduction)
-# Result: empty, return 1.0
-
-result = meijerg((1.0, 0.25), (0.25, 1.0), 1, 1, 0.7)
-# is equivalent to:
-result = meijerg((), (), (), (), 0.7)  # both a and b empty → returns 1
-```
+The reduction is applied recursively, so cancellation cascades are handled automatically.
 
 ## Category 2: Elementary Functions
 
 ### Exponential: $e^x$
-
-The Meijer G-function
 
 ```math
 G_{0,1}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 0 \end{matrix}\right) = e^{-z}
@@ -71,14 +52,7 @@ G_{0,1}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 0 \end{matrix}\right) = e^
 
 **Mapping**: `meijerg((), (), (0,), (), -x)` → `exp(x)`
 
-**Usage**:
-```julia
-meijerg((), (), (0,), (), -0.5)  # ≈ exp(0.5)
-```
-
 ### Sine: $\sin(x)$
-
-The Meijer G-function
 
 ```math
 G_{0,2}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 1/2, 0 \end{matrix}\right) = \frac{\sin(2\sqrt{z})}{\sqrt{\pi}}
@@ -89,15 +63,7 @@ G_{0,2}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 1/2, 0 \end{matrix}\right)
 Concretely:
 $$\sin(y) = \sqrt{\pi} \cdot G_{0,2}^{1,0}\!\left(\frac{y^2}{4}\;\middle|\;\begin{matrix} - \\ 1/2, 0 \end{matrix}\right)$$
 
-**Usage**:
-```julia
-y = 0.7
-sqrt(pi) * meijerg((), (), (0.5,), (0,), y^2/4)
-```
-
 ### Cosine: $\cos(x)$
-
-Similarly, the Meijer G-function
 
 ```math
 G_{0,2}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 0, 1/2 \end{matrix}\right) = \frac{\cos(2\sqrt{z})}{\sqrt{\pi}}
@@ -106,12 +72,6 @@ G_{0,2}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 0, 1/2 \end{matrix}\right)
 **Mapping**: `meijerg((), (), (0,), (0.5,), z^2/4)` with scaling → `cos(z)`
 
 $$\cos(y) = \sqrt{\pi} \cdot G_{0,2}^{1,0}\!\left(\frac{y^2}{4}\;\middle|\;\begin{matrix} - \\ 0, 1/2 \end{matrix}\right)$$
-
-**Usage**:
-```julia
-y = 0.7
-sqrt(pi) * meijerg((), (), (0,), (0.5,), y^2/4)
-```
 
 ## Category 3: Bessel Functions
 
@@ -133,11 +93,9 @@ For the special order-zero case, the implementation uses
 G_{0,2}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 0, 0 \end{matrix}\right) = I_0(2\sqrt{-z}), \quad z < 0 \text{ real}
 ```
 
-to preserve expected real continuation behavior on negative real inputs.
+**Mapping**: `meijerg((), (), (0, 0), (), z)` for negative real `z` → `besseli(0, 2*sqrt(-z))`
 
 ### Modified Bessel K: $K_\nu(x)$
-
-The Meijer G-function
 
 ```math
 G_{0,2}^{2,0}\!\left(z\;\middle|\;\begin{matrix} - \\ \nu/2, -\nu/2 \end{matrix}\right) = 2K_\nu(2\sqrt{z})
@@ -152,15 +110,6 @@ G_{0,2}^{2,0}\!\left(z\;\middle|\;\begin{matrix} - \\ b_1, b_2 \end{matrix}\righ
 ```
 
 **Mapping**: `meijerg((), (), (b1, b2), (), z)` → `z^(-c) * 2*besselk(ν, 2*sqrt(z))`
-
-**Usage**:
-```julia
-ν = 0.8
-z = 1.2
-lhs = meijerg((), (), (ν/2, -ν/2), (), z)
-rhs = 2 * besselk(ν, 2*sqrt(z))
-lhs ≈ rhs  # true
-```
 
 ## Category 4: Error Functions and Incomplete Gamma
 
@@ -229,34 +178,16 @@ With `x = 2z + 1` in the implementation,
 ## Category 6: Logarithmic Functions (Confluent Poles)
 
 Confluent-pole Meijer G-functions arise when parameters have integer differences, leading to
-logarithmic singularities in the residue expansion. While the full evaluator handles these via
-parameter perturbation (4× evaluation + Lagrange extrapolation), direct computation using
-standard functions is faster and more accurate.
+logarithmic singularities in the residue expansion. For recognized cases, the reduction system
+uses direct special-function formulas instead of the generic perturbation path.
 
 ### Logarithm of (1+z): $\log(1 + z) / z$
-
-The Meijer G-function with confluent poles
 
 ```math
 G_{2,2}^{1,2}\!\left(z\;\middle|\;\begin{matrix} 1, 1 \\ 1, 0 \end{matrix}\right) = \frac{\log(1+z)}{z}
 ```
 
-This represents the limiting case where the order-1 parameter difference between numerator
-and denominator creates a simple logarithmic pole (DLMF 15.8.2, Gradshteyn & Ryzhik 9.353).
-
 **Mapping**: `meijerg((1, 1), (1, 0), 1, 2, z)` → `log1p(z) / z`
-
-**Usage**:
-```julia
-z = 0.3
-result = meijerg((1.0, 1.0), (1.0, 0.0), 1, 2, z)
-# ≈ log(1.3) / 0.3
-
-# High precision
-z_big = BigFloat("0.3")
-result_big = meijerg((BigFloat(1), BigFloat(1)), (BigFloat(1), BigFloat(0)), 1, 2, z_big)
-# Preserves BigFloat precision throughout
-```
 
 ## What about the many G → hypergeometric reductions?
 

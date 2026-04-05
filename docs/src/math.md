@@ -90,14 +90,14 @@ Before computation, the implementation removes cancelling $\Gamma$ factors:
 When residue-based expansions (Slater lower/upper) encounter confluent poles the associated $\Gamma$ denominators vanish and the standard expansion formula becomes indeterminate. 
 
 As mentioned above `MeijerG.jl` handles this by **adaptive perturbation**: a parameter-regularization technique that computes
-the desired G-function as a limit. For confluent cases, a small perturbation $\delta \ll 1$ is applied to the parameter set (e.g., $b_j \to b_j + \delta\, \epsilon_j$ where $\epsilon_j$ are independent random variables), and the expansion is evaluated at increasing refinement levels. Richardson extrapolation on the results drives convergence to the true value without explicit limit taking or numerical differentiation.
+the desired G-function as a limit. For confluent cases, a small perturbation $\delta \ll 1$ is applied deterministically to the active parameter family. In lower mode, the active $b$-parameters are shifted symmetrically about their center index; in upper mode, the active $a$-parameters are shifted the same way. At each refinement level the expansion is evaluated at four symmetric offsets $\{-\delta, -\delta/2, \delta/2, \delta\}$, and a Lagrange interpolation in the perturbation variable is used to estimate the $\delta \to 0$ limit.
 
 The perturbation approach:
 
-1. Computes the Slater expansion at a perturbed parameter set.
+1. Computes the Slater expansion at four symmetrically perturbed parameter sets.
 2. Refines by halving the perturbation magnitude.
-3. Extrapolates successive results using Richardson coefficients to remove leading-order error terms.
-4. Terminates when convergence reaches the user-requested tolerance (relative and absolute).
+3. Uses Lagrange interpolation at perturbation value $0$ to estimate the confluent limit at each refinement level.
+4. Terminates when successive refinement levels agree within the user-requested relative and absolute tolerances.
 
 If perturbation fails to converge after a configurable number of refinement levels (default: 8), the package falls back to direct Mellin-Barnes contour integration using [QuadGK.jl](https://github.com/JuliaMath/QuadGK.jl).
 

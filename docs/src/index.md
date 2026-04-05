@@ -75,7 +75,7 @@ catch err
 end
 ```
 
-For Meijer G, pass complex input explicitly when you want the complex branch:
+Pass complex input explicitly when you want the complex branch:
 
 ```@example
 using MeijerG
@@ -87,12 +87,24 @@ meijerg((), (1, 0), 2, 0, -1.0 + 0im)
 
 ```@example
 using MeijerG, ComplexPhasePortrait, ColorSchemes, Images
-viridis_colormap = [RGB(c.r, c.g, c.b) for c in ColorSchemes.viridis.colors];
+
+# Define periodic viridis colormap
+function periodic_colormap(colors)
+  base = [RGB(c.r, c.g, c.b) for c in colors]
+  return vcat(base, base[end-1:-1:2])
+end
+viridis_colormap = periodic_colormap(ColorSchemes.viridis.colors)
+
+# Evaluation grid and target function
 xs = range(-5.0, 5.0; length=1000)
 ys = range(-5.0, 5.0; length=1000)
 Z  = [x + im*y for y in ys, x in xs]
 f(z) = meijerg((1/2,1/2,-1/4,3.0), (0.0,1/2,5,-3/2), 2, 1, z)
+
+# Generate image
 img = Images.clamp01nan.(portrait(f.(Z), PTcgrid, colormap=viridis_colormap))
+
+# Apply a simple disk mask
 h, w = size(img)
 cy, cx = (h + 1) / 2, (w + 1) / 2
 r2 = (min(h, w) / 2)^2
@@ -100,5 +112,7 @@ disk_logo = [
   (x - cx)^2 + (y - cy)^2 <= r2 ? RGBA(img[y, x], 1) : RGBA(1, 1, 1, 0)
   for y in 1:h, x in 1:w
 ]
+
+# Save an deploy logo
 save("assets/logo.png", disk_logo);
 ```
