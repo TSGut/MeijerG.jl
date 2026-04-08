@@ -16,6 +16,13 @@ import MeijerG: meijerg_to_latex_and_math
         @test mathematica == "MeijerG[{{1}, {2}}, {{3}, {4}}, 5]"
     end
 
+    @testset "Macro Error Cases" begin
+        @test_throws LoadError eval(:(@formatter 1))
+        @test_throws LoadError eval(:(@formatter meijerg))
+        @test_throws LoadError eval(:(@formatter sin(1)))
+        @test_throws ArgumentError eval(:(@formatter meijerg((1,), (2,), 1, 1)))
+    end
+
     @testset "Split Parameter Form" begin
         plain, latex, mathematica = meijerg_to_latex_and_math((1,), (2,), (3,), (4,), 5, verbose=false)
         @test plain == "G_{2,2}^{1,1}(5 | 1, 2 ; 3, 4)"

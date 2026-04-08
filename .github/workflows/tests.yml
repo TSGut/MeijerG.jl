@@ -34,7 +34,7 @@ jobs:
         run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
       - name: Run tests
-        run: julia --project=. -e 'using Pkg; Pkg.test()'
+        run: julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
 
       - name: Process coverage
         uses: julia-actions/julia-processcoverage@v1
