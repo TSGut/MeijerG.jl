@@ -1,6 +1,7 @@
 # MeijerG.jl
 
 [![CI](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml/badge.svg)](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/TSGut/MeijerG.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/TSGut/MeijerG.jl)
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://tsgut.github.io/MeijerG.jl/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19430427.svg)](https://doi.org/10.5281/zenodo.19430427)
 
