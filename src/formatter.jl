@@ -19,7 +19,7 @@ A tuple `(plaintext_str, latex_str, mathematica_str)` containing the Plaintext, 
 macro formatter(expr, verbose=true)
     # Ensure the expression is a function call
     if !(expr isa Expr && expr.head == :call)
-        throw(ArgumentError("@formatter must be applied to a function call"))
+        throw(error("@formatter must be applied to a function call"))
     end
 
     # Extract the function name and arguments
@@ -28,7 +28,7 @@ macro formatter(expr, verbose=true)
 
     # Check if the function is `meijerg`
     if func_name != :meijerg
-        throw(ArgumentError("@formatter can only be applied to `meijerg` function calls"))
+        throw(error("@formatter can only be applied to `meijerg` function calls"))
     end
 
     esc(:( meijerg_to_latex_and_math($(args...), verbose=$(verbose)) ))
