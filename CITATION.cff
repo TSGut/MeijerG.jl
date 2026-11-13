@@ -7,9 +7,9 @@ authors:
     given-names: Timon S.
     affiliation: University of Leeds
     email: T.S.Gutleb@leeds.ac.uk
-doi: 10.5281/zenodo.19430427
+doi: 10.5281/zenodo.19430426
 repository-code: "https://github.com/TSGut/MeijerG.jl"
-url: "https://doi.org/10.5281/zenodo.19430427"
+url: "https://doi.org/10.5281/zenodo.19430426"
 license: MIT
 keywords:
   - Julia

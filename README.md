@@ -3,7 +3,7 @@
 [![CI](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml/badge.svg)](https://github.com/TSGut/MeijerG.jl/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/TSGut/MeijerG.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/TSGut/MeijerG.jl)
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://timon.gutleb.com/MeijerG.jl/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19430427.svg)](https://doi.org/10.5281/zenodo.19430427)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19430426.svg)](https://doi.org/10.5281/zenodo.19430426)
 
 A Julia package for computing the **Meijer G-function** defined by the Mellin-Barnes integral
 
