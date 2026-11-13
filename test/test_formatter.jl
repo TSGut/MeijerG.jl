@@ -16,6 +16,29 @@ import MeijerG: meijerg_to_latex_and_math
         @test mathematica == "MeijerG[{{1}, {2}}, {{3}, {4}}, 5]"
     end
 
+    @testset "Subscript order G_{p,q} with p != q" begin
+        # p = length(a) = 1, q = length(b) = 3
+        plain, latex, mathematica = meijerg_to_latex_and_math((1,), (2, 3, 4), 2, 1, 5, verbose=false)
+        @test plain == "G_{1,3}^{2,1}(5 | 1 ; 2, 3, 4)"
+        @test occursin("G_{1,3}^{2,1}", latex)
+        @test mathematica == "MeijerG[{{1}, {}}, {{2, 3}, {4}}, 5]"
+        plain, latex, mathematica = meijerg_to_latex_and_math((1,), (), (2, 3), (4,), 5, verbose=false)
+        @test plain == "G_{1,3}^{2,1}(5 | 1 ; 2, 3, 4)"
+        @test occursin("G_{1,3}^{2,1}", latex)
+        @test mathematica == "MeijerG[{{1}, {}}, {{2, 3}, {4}}, 5]"
+    end
+
+    @testset "Macro hygiene" begin
+        # qualified call, module-qualified macro, and no `verbose` binding left behind
+        result = MeijerG.@formatter MeijerG.meijerg((1,), (2, 3), 1, 1, 5) verbose=false
+        @test result[1] == "G_{1,2}^{1,1}(5 | 1 ; 2, 3)"
+        @test !isdefined(@__MODULE__, :verbose)
+        # caller variables are resolved in the caller's scope
+        x = 0.25
+        result = @formatter meijerg((x,), (2, 3), 1, 1, 5) verbose=false
+        @test result[1] == "G_{1,2}^{1,1}(5 | 0.25 ; 2, 3)"
+    end
+
     @testset "Macro Error Cases" begin
         @test_throws LoadError eval(:(@formatter 1))
         @test_throws LoadError eval(:(@formatter meijerg))
@@ -37,7 +60,19 @@ import MeijerG: meijerg_to_latex_and_math
     end
 
     @testset "Macro Usage" begin
-        result = @formatter meijerg((1, 2), (3, 4), 1, 1, 5);
+        # Default (verbose) call: capture the printed block rather than writing to the test log
+        result_ref = Ref{Any}()
+        printed = mktemp() do _, io
+            redirect_stdout(io) do
+                result_ref[] = @formatter meijerg((1, 2), (3, 4), 1, 1, 5)
+            end
+            flush(io)
+            seekstart(io)
+            read(io, String)
+        end
+        result = result_ref[]
+        @test occursin("Plaintext: G_{2,2}^{1,1}(5 | 1, 2 ; 3, 4)", printed)
+        @test occursin("Mathematica: MeijerG[{{1}, {2}}, {{3}, {4}}, 5]", printed)
         @test result[1] == "G_{2,2}^{1,1}(5 | 1, 2 ; 3, 4)"  # plaintext
         @test occursin("\\begin{matrix}", result[2])  # LaTeX
         @test occursin("\\end{matrix}", result[2])
@@ -60,7 +95,7 @@ import MeijerG: meijerg_to_latex_and_math
         @test result[3] == "MeijerG[{{1}, {2}}, {{3}, {4}}, 5]"
 
         # Macro with split-parameter form
-        result = @formatter meijerg((1,), (2,), (3,), (4,), 5);
+        result = @formatter meijerg((1,), (2,), (3,), (4,), 5) verbose=false;
         @test result[1] == "G_{2,2}^{1,1}(5 | 1, 2 ; 3, 4)"
         @test occursin("\\begin{matrix}", result[2])
         @test occursin("\\end{matrix}", result[2])
@@ -72,7 +107,7 @@ import MeijerG: meijerg_to_latex_and_math
         @test result[3] == "MeijerG[{{1}, {2}}, {{3}, {4}}, 5]"
 
         # Macro with Float inputs
-        result = @formatter meijerg((1.0, 2.0), (3.0, 4.0), 1, 1, 5.0);
+        result = @formatter meijerg((1.0, 2.0), (3.0, 4.0), 1, 1, 5.0) verbose=false;
         @test result[1] == "G_{2,2}^{1,1}(5.0 | 1.0, 2.0 ; 3.0, 4.0)"
         @test occursin("\\begin{matrix}", result[2])
         @test occursin("\\end{matrix}", result[2])
@@ -84,7 +119,7 @@ import MeijerG: meijerg_to_latex_and_math
         @test result[3] == "MeijerG[{{1.0}, {2.0}}, {{3.0}, {4.0}}, 5.0]"
 
         # Macro with Complex Float inputs
-        result = @formatter meijerg((1.0+2.0im, 2.0+3.0im), (3.0, 4.0), 1, 1, 5);
+        result = @formatter meijerg((1.0+2.0im, 2.0+3.0im), (3.0, 4.0), 1, 1, 5) verbose=false;
         @test result[1] == "G_{2,2}^{1,1}(5 | 1.0 + 2.0im, 2.0 + 3.0im ; 3.0, 4.0)"
         @test occursin("\\begin{matrix}", result[2])
         @test occursin("\\end{matrix}", result[2])
@@ -97,7 +132,7 @@ import MeijerG: meijerg_to_latex_and_math
         @test result[3] == "MeijerG[{{1.0 + 2.0im}, {2.0 + 3.0im}}, {{3.0}, {4.0}}, 5]"
 
         # Macro with BigFloat inputs
-        result = @formatter meijerg((BigFloat(1.5), BigFloat(2.25)), (BigFloat(3.0), BigFloat(4.0)), 1, 1, BigFloat(5.0));
+        result = @formatter meijerg((BigFloat(1.5), BigFloat(2.25)), (BigFloat(3.0), BigFloat(4.0)), 1, 1, BigFloat(5.0)) verbose=false;
         @test result[1] == "G_{2,2}^{1,1}(5.0 | 1.5, 2.25 ; 3.0, 4.0)"
         @test occursin("\\begin{matrix}", result[2])
         @test occursin("\\end{matrix}", result[2])
@@ -111,7 +146,7 @@ import MeijerG: meijerg_to_latex_and_math
         # Macro with Complex BigFloat inputs
         a1 = Complex(BigFloat(1.5), BigFloat(2.5))
         a2 = Complex(BigFloat(2.75), BigFloat(1.25))
-        result = @formatter meijerg((a1, a2), (BigFloat(3.0), BigFloat(4.0)), 1, 1, BigFloat(5.0));
+        result = @formatter meijerg((a1, a2), (BigFloat(3.0), BigFloat(4.0)), 1, 1, BigFloat(5.0)) verbose=false;
         @test result[1] == "G_{2,2}^{1,1}(5.0 | 1.5 + 2.5im, 2.75 + 1.25im ; 3.0, 4.0)"
         @test occursin("\\begin{matrix}", result[2])
         @test occursin("\\end{matrix}", result[2])

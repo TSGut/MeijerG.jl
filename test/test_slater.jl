@@ -1,5 +1,4 @@
 using HypergeometricFunctions: pFq
-include("test_utilities.jl")
 
 @testset "Slater evaluator" begin
     @testset "Fallback behavior" begin
@@ -20,9 +19,130 @@ include("test_utilities.jl")
         end
     end
 
+    @testset "Regularized denominator-pole residues" begin
+        x = 0.2
+        @test MeijerG._regularized_pFq_at_poles((), (-1.0,), x, (true,)) ≈
+              x^2 / 2 * pFq((), (3.0,), x) rtol=1e-14
+        @test MeijerG._regularized_pFq_at_poles((), (0.0, -1.0), x, (true, true)) ≈
+              x^2 / 2 * pFq((), (2.0, 3.0), x) rtol=1e-14
+
+        a = (0.2, 1.1, -0.8)
+        b = (0.0, 0.2, 0.5)
+        z = 1.43^2
+        expected = -0.10819082291256744
+
+        @test meijerg_slater(a, b, 2, 1, z) ≈ expected rtol=1e-10
+        @test meijerg(a, b, 2, 1, z) ≈ expected rtol=1e-10
+
+        # The inversion identity gives the corresponding lower-expansion case.
+        dual_a = map(x -> 1 - x, b)
+        dual_b = map(x -> 1 - x, a)
+        @test meijerg_slater(dual_a, dual_b, 1, 2, inv(z)) ≈ expected rtol=1e-10
+        @test meijerg(dual_a, dual_b, 1, 2, inv(z)) ≈ expected rtol=1e-10
+    end
+
     @testset "Domain error on integer parameter differences" begin
         # Integer difference raises domain error.
         @test_throws DomainError meijerg_slater((1.0,), (0.0,), 1, 1, 0.5)
+    end
+end
+
+@testset "Standalone exact confluence Laurent evaluator" begin
+    relerr(x, y) = abs(x - y) / max(abs(y), eps(Float64))
+
+    @testset "Safety gates" begin
+        @test_throws ArgumentError meijerg_laurent((0.42 + 0.13im,),
+                                                   (0.11 + 0.07im, 0.73 - 0.09im),
+                                                   2, 1, 1e-4 + 0im)
+
+        @test isfinite(real(meijerg_laurent((), (0.0, 0.0, 0.0),
+                                            3, 0, 1e-4 + 0im)))
+
+        @test_throws ArgumentError meijerg_laurent((), (0.0, 0.0, 0.0, 0.0, 0.0),
+                                                   5, 0, 1e-4 + 0im)
+
+        @test_throws ArgumentError meijerg_laurent((0.42 + 0.23im,),
+                                                   (0.2 + 0.1im,
+                                                    0.20001 + 0.1im,
+                                                    1.1 - 0.2im),
+                                                   2, 1, 1e-4 + 0im)
+
+        @test_throws ArgumentError meijerg_laurent((0.2 + 0.1im, 0.7 - 0.2im),
+                                                   (0.1 + 0.2im, 0.1 + 0.2im),
+                                                   2, 1, 0.9 + 0im)
+    end
+
+    @testset "Exact lower active-pole collisions" begin
+        a = (0.19 + 0.31im, 0.74 - 0.27im, 1.36 + 0.16im)
+        bbase = (-0.42 + 0.18im, 0.0 + 0im, 0.69 + 0.24im, 1.28 - 0.11im, 1.77 + 0.21im)
+        for (shift, z) in ((0, 3e-5 + 0im),
+                           (1, 1e-4 * cis(pi / 8)),
+                           (2, 1e-4 * cis(-pi / 6)))
+            b = (bbase[1], bbase[1] + shift, bbase[3], bbase[4], bbase[5])
+            laurent = meijerg_laurent(a, b, 3, 2, z)
+            logratio = MeijerG._try_meijerg_slater_logratio_jet_exact(a, b, 3, 2, z)
+            @test logratio.status === :ok
+            @test logratio.selected
+            @test isfinite(real(laurent)) && isfinite(imag(laurent))
+
+            val = meijerg(a, b, 3, 2, z)
+            @test val ≈ logratio.value atol=1e-12 rtol=1e-12
+            @test val ≈ laurent atol=1e-12 rtol=1e-12
+            contour = meijerg_contour(a, b, 3, 2, z; contour_case=:ii,
+                                      rtol=1e-8, atol=1e-10)
+            @test relerr(val, contour) < 1e-8
+        end
+    end
+
+    @testset "Float32 exact cluster with unrelated near pole flags" begin
+        a = (0.23f0 + 0.12f0im, 0.88f0 - 0.17f0im, 1.31f0 + 0.09f0im)
+        b1 = 0.52f0 + 0.14f0im
+        b = (b1, b1, 0.53f0 + 0.28f0im, -0.47f0 + 0.28f0im, 1.67f0 + 0.16f0im)
+        z = 2.5f-5 * cis(ComplexF32(-0.09f0))
+
+        detected = MeijerG._detect_exact_confluent_clusters(a, b, 3, 2, :lower)
+        @test detected.has_near
+
+        laurent = meijerg_laurent(a, b, 3, 2, z)
+        @test isfinite(real(laurent)) && isfinite(imag(laurent))
+    end
+
+    @testset "Float32 upper Laurent tail ordering" begin
+        a1 = 0.46f0 + 0.16f0im
+        a = (a1, a1, 1.18f0 - 0.22f0im, -0.35f0 + 0.31f0im,
+             1.73f0 + 0.18f0im)
+        b = (0.26f0 - 0.19f0im, 0.91f0 + 0.24f0im, 1.42f0 - 0.17f0im)
+        z = 35.0f0 * cis(ComplexF32(-0.075f0))
+
+        laurent = meijerg_laurent(a, b, 2, 3, z)
+        logratio = MeijerG._try_meijerg_slater_logratio_jet_exact(a, b, 2, 3, z)
+        @test logratio.status === :ok
+        @test logratio.selected
+        @test laurent isa ComplexF32
+        @test isfinite(real(laurent)) && isfinite(imag(laurent))
+        @test laurent ≈ logratio.value rtol=2e-6 atol=2e-6
+    end
+
+    @testset "Exact upper active-pole collisions" begin
+        abase = (-0.22 + 0.18im, 0.0 + 0im, 1.41 - 0.22im, 2.03 + 0.31im)
+        b = (0.26 + 0.31im, 1.12 - 0.16im)
+        for (shift, z) in ((0, 50.0 + 0im),
+                           (1, 50.0 * cis(pi / 8)),
+                           (2, 50.0 * cis(-pi / 6)))
+            a = (abase[1], abase[1] + shift, abase[3], abase[4])
+            laurent = meijerg_laurent(a, b, 1, 2, z)
+            logratio = MeijerG._try_meijerg_slater_logratio_jet_exact(a, b, 1, 2, z)
+            @test logratio.status === :ok
+            @test logratio.selected
+            @test isfinite(real(laurent)) && isfinite(imag(laurent))
+
+            val = meijerg(a, b, 1, 2, z)
+            @test val ≈ logratio.value atol=1e-12 rtol=1e-12
+            @test val ≈ laurent atol=1e-12 rtol=1e-12
+            contour = meijerg_contour(a, b, 1, 2, z; contour_case=:iii,
+                                      rtol=1e-8, atol=1e-10)
+            @test relerr(val, contour) < 1e-8
+        end
     end
 end
 
@@ -272,13 +392,14 @@ end
             @test lhs_upper ≈ rhs_upper atol=1e-11 rtol=1e-14
         end
     end
-    @testset "Slater NaN-avoidance" begin
-        @testset "Skip pFq when gamma-ratio zero" begin
-            val = meijerg_slater((1/3, 2/3), (1.0, 2.0), 1, 1, 0.5 + 0.5im)
+    @testset "Slater denominator-pole regularization" begin
+        @testset "Regularize pFq when gamma-ratio is zero" begin
+            z = 0.5 + 0.5im
+            val = meijerg_slater((1/3, 2/3), (1.0, 2.0), 1, 1, z)
+            regularized = (5/3) * (4/3) * z * pFq((8/3, 7/3), (2,), z)
+            expected = gamma(5/3) / gamma(-1/3) * z * regularized
             @test isfinite(real(val)) && isfinite(imag(val))
-            @test abs(val) ≈ 0.0 atol=1e-14
+            @test val ≈ expected atol=1e-14 rtol=1e-14
         end
     end
 end
-
-

@@ -32,7 +32,7 @@ end
 Attempt to recognize special cases and reduce to simpler functions. 
 
 For square-root-based explicit reductions, real inputs are only reduced on
-strictly positive real `z`; pass `z + 0im` to evaluate on the complex branch.
+strictly positive real `z`. Pass `z + 0im` to evaluate on the complex branch.
 
 Returns `nothing` if no rule matches (caller will fall back to full `meijerg` evaluation).
 
@@ -47,7 +47,7 @@ This is the core dispatcher for the reduction system. It checks for reduction ru
     `G_{0,2}^{1,0}(z | - ; 0, 0) = I_0(2√(-z))` for negative real `z`
 5. **Bessel J**: `G_{0,2}^{1,0}(z | - ; ν/2, -ν/2) = J_ν(2√z)`
 6. **Bessel K (symmetric and shifted form)**:
-    `G_{0,2}^{2,0}(z | - ; b₁, b₂) = z^{-c} 2K_ν(2√z)` with
+    `G_{0,2}^{2,0}(z | - ; b₁, b₂) = z^c 2K_ν(2√z)` with
     `c = (b₁+b₂)/2`, `ν = |b₁-b₂|`
 7. **Erf half-order reduction**:
     `G_{1,2}^{1,1}(z | 1 ; 1/2, 0) = √π erf(√z)`
@@ -63,6 +63,13 @@ This is the core dispatcher for the reduction system. It checks for reduction ru
      `P_n^(α,β)(x) = Γ(n+α+1)Γ(-n-α-β) G_{2,2}^{1,0}((x-1)/2 | n+1, -n-α-β ; 0, -α)`
 14. **Logarithm (1+z)**: `G_{2,2}^{1,2}(z | 1, 1 ; 1, 0) = log(1+z) / z` (direct evaluation via `log1p`)
 """
+function _bessels_real_value(f, order, argument)
+    argument isa Real || return nothing
+    promoted_order, promoted_argument = promote(order, argument)
+    promoted_argument isa Union{Float32,Float64} || return nothing
+    return f(promoted_order, promoted_argument)
+end
+
 function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     # Cancellation/order reduction: eliminate exact parameter matches across
     # left/right partitions, then continue reducing recursively.
@@ -117,7 +124,9 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     if a === () && m == 1 && n == 0 && length(b) == 2 && iszero(b[1]) && iszero(b[2])
         z_promoted = float(z)
         if z_promoted isa Real && z_promoted < 0
-            return besseli(zero(z_promoted), 2 * sqrt(-z_promoted))
+            value = _bessels_real_value(
+                besseli, zero(z_promoted), 2 * sqrt(-z_promoted))
+            return value
         end
     end
 
@@ -129,21 +138,12 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     if _can_use_sqrt_reduction(z) && a === () && m == 1 && n == 0 && length(b) == 2 && isequal(b[2], -b[1])
         z_promoted = float(z)
         ν = float(b[1] - b[2])
-        try
-            return besselj(ν, 2 * sqrt(z_promoted))
-        catch err
-            # SpecialFunctions currently lacks the BigFloat non-integer-order
-            # input path required here, so fall back to Slater for BigFloat
-            # (real or complex) until direct Bessel-J support is available.
-            if err isa MethodError && (z isa BigFloat || z isa Complex{BigFloat})
-                return nothing
-            end
-            rethrow()
-        end
+        value = _bessels_real_value(besselj, ν, 2 * sqrt(z_promoted))
+        value === nothing || return value
     end
 
     # G_{0,2}^{2,0}(z | - ; ν/2, -ν/2) = 2K_ν(2sqrt(z))
-    # G_{0,2}^{2,0}(z | - ; b1, b2) = z^{-c} * 2K_ν(2√z)  where c = (b1+b2)/2, ν = |b1-b2|
+    # G_{0,2}^{2,0}(z | - ; b1, b2) = z^c * 2K_ν(2√z)  where c = (b1+b2)/2, ν = |b1-b2|
     # Derived from DLMF 16.19.1 parameter-shift formula + DLMF 10.32.10 Bessel K identity.
     # Handles any b1, b2 including the confluent-pole case b1-b2 ∈ ℤ.
     if a === () && m == 2 && n == 0 && length(b) == 2 && z isa Real && z <= zero(z)
@@ -154,27 +154,28 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
         b1f, b2f = float(b[1]), float(b[2])
         c  = (b1f + b2f) / (one(b1f) + one(b1f))
         ν  = abs(float(b1f - b2f))
-        return z_promoted^(-c) * 2 * besselk(ν, 2 * sqrt(z_promoted))
+        value = _bessels_real_value(besselk, ν, 2 * sqrt(z_promoted))
+        value === nothing || return z_promoted^c * 2 * value
     end
 
     # G_{1,2}^{1,1}(z | 1 ; a, 0) = γ(a,z)
-    # For a=1/2 this is sqrt(pi)*erf(sqrt(z)); keep an explicit branch for clarity
+    # For a=1/2 this is sqrt(pi)*erf(sqrt(z)). Keep an explicit branch for clarity
     # and better numerical behavior at small |z|.
     if n == 1 && m == 1 && isequal(a, (1,)) && half_zero_tuple && z isa Real && z <= zero(z)
         throw(DomainError(z, "Erf reduction requires positive real z; pass z + 0im for complex-branch evaluation"))
     end
     if _can_use_sqrt_reduction(z) && n == 1 && m == 1 && isequal(a, (1,)) && half_zero_tuple
         z_promoted = float(z)
-        return sqrt(convert(typeof(z_promoted), pi)) * erf(sqrt(z_promoted))
+        return sqrt(convert(typeof(z_promoted), pi)) * _erf(sqrt(z_promoted))
     end
 
-    # G_{1,2}^{2,1}(z | 1 ; 1/2, 0) = sqrt(pi)*erfc(sqrt(z))
-    if n == 1 && m == 2 && isequal(a, (1,)) && half_zero_tuple && z isa Real && z <= zero(z)
+    # G_{1,2}^{2,0}(z | 1 ; 1/2, 0) = Γ(1/2,z) = sqrt(pi)*erfc(sqrt(z))
+    if n == 0 && m == 2 && isequal(a, (1,)) && half_zero_tuple && z isa Real && z <= zero(z)
         throw(DomainError(z, "Erfc reduction requires positive real z; pass z + 0im for complex-branch evaluation"))
     end
-    if _can_use_sqrt_reduction(z) && n == 1 && m == 2 && isequal(a, (1,)) && half_zero_tuple
+    if _can_use_sqrt_reduction(z) && n == 0 && m == 2 && isequal(a, (1,)) && half_zero_tuple
         z_promoted = float(z)
-        return sqrt(convert(typeof(z_promoted), pi)) * erfc(sqrt(z_promoted))
+        return sqrt(convert(typeof(z_promoted), pi)) * _erfc(sqrt(z_promoted))
     end
 
     # Orthogonal polynomial reductions (integer n >= 0):
@@ -196,7 +197,7 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
                 else
                     exp(-loggamma(lag_arg))
                 end
-                return laguerrel(n_int, α, z_promoted) * inv_gamma
+                return _laguerrel(n_int, α, z_promoted) * inv_gamma
             end
 
             # Hermite-even channel: b = (0, 1/2), equivalent to α = -1/2.
@@ -204,7 +205,8 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
                 coeff = 2.0^(2n_int) * factorial(big(n_int))
                 denom = factorial(big(2n_int)) * sqrt(convert(typeof(z_promoted), pi))
                 half = one(z_promoted) / (one(z_promoted) + one(z_promoted))
-                return (coeff / denom) * laguerrel(n_int, -half, z_promoted)
+                return (coeff / denom) *
+                    _laguerrel(n_int, -half, z_promoted)
             end
 
             # Hermite-odd channel (x factored outside): b = (0, -1/2), α = +1/2.
@@ -212,7 +214,8 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
                 coeff = 2.0^(2n_int + 1) * factorial(big(n_int))
                 denom = factorial(big(2n_int + 1)) * sqrt(convert(typeof(z_promoted), pi))
                 half = one(z_promoted) / (one(z_promoted) + one(z_promoted))
-                return (coeff / denom) * laguerrel(n_int, half, z_promoted)
+                return (coeff / denom) *
+                    _laguerrel(n_int, half, z_promoted)
             end
         end
     end
@@ -246,7 +249,7 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
                 exp(-loggamma(jac_arg2))
             end
             inv_pref = inv_g1 * inv_g2
-            return jacobip(n_int, α, β, x_jacobi) * inv_pref
+            return _jacobip(n_int, α, β, x_jacobi) * inv_pref
         end
     end
 
@@ -254,28 +257,19 @@ function _reduce_special_case(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     if n == 1 && m == 1 && isequal(a, (1,)) && length(b) == 2 && isequal(b[2], zero(b[2]))
         z_promoted = float(z)
         α = float(b[1])
-        full_gamma = if α isa Real && α < zero(α)
-            logabsγ, signγ = logabsgamma(α)
-            signγ * exp(logabsγ)
-        else
-            exp(loggamma(α))
-        end
-        return full_gamma - gamma(α, z_promoted)
+        return gamma_lower(α, z_promoted)
     end
 
-    # G_{1,2}^{2,1}(z | 1 ; a, 0) = Γ(a,z)
-    if n == 1 && m == 2 && isequal(a, (1,)) && length(b) == 2 && isequal(b[2], zero(b[2]))
+    # G_{1,2}^{2,0}(z | 1 ; a, 0) = Γ(a,z)
+    if n == 0 && m == 2 && isequal(a, (1,)) && length(b) == 2 && isequal(b[2], zero(b[2]))
         z_promoted = float(z)
         α = float(b[1])
         return gamma(α, z_promoted)
     end
 
-    # Logarithmic confluent poles: G_{2,2}^{1,2}(z | 1, 1 ; 1, 0)
-    # Maps to log(1+z) / z via parameter perturbation limit (Gradshteyn & Ryzhik 9.353, DLMF 15.8.2)
-    # Direct computation avoids expensive 4× evaluation + two-sided Lagrange interpolation
+    # Logarithmic confluent poles: G_{2,2}^{1,2}(z | 1, 1 ; 1, 0) = log(1+z)
     if length(a) == 2 && length(b) == 2 && m == 1 && n == 2 && isequal(a, (1, 1)) && isequal(b, (1, 0))
-        z_promoted = float(z)
-        return log1p(z_promoted) / z_promoted
+        return log1p(float(z))
     end
 
     return nothing

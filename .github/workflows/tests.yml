@@ -16,7 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        julia-version: ['1.12']
+        # 'lts' and '1' resolve to the current long-term-support and newest stable
+        # releases, so we track the ecosystem without manual bumps.
+        julia-version: ['lts', '1']
 
     steps:
       - name: Checkout

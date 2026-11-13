@@ -1,8 +1,3 @@
-import Pkg
-
-Pkg.develop(path = joinpath(@__DIR__, ".."))
-Pkg.instantiate()
-
 using Documenter
 using MeijerG
 
@@ -12,6 +7,9 @@ makedocs(
     modules = [MeijerG],
     sitename = "MeijerG.jl",
     checkdocs = :exports,
+    # ConfluentJets is an internal submodule (its exports are not part of the
+    # MeijerG API) so its docstrings are not part of the manual.
+    checkdocs_ignored_modules = [MeijerG.ConfluentJets],
     format = Documenter.HTML(prettyurls = get(ENV, "CI", "false") == "true", assets = ["assets/theme.js"]),
     pages = [
         "Home" => "index.md",

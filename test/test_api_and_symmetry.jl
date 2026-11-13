@@ -45,3 +45,29 @@
         end
     end
 end
+
+@testset "Return type follows the inputs on every path" begin
+    # (label, a, b, m, n, z): one case per evaluation path of meijerg
+    cases = (
+        ("reduction",           (),         (0, 1//2),     1, 0, 1//2),
+        ("slater",              (3//10, 4//5), (1//5, 11//10), 1, 1, 7//10),
+        ("near-confluent jet",  (3//10,),   (1//5, 1//5 + 1//10^7), 2, 1, 1//2),
+        ("exact-confluent jet", (3//10,),   (1//5, 6//5),  2, 1, 1//2),
+        ("contour fallback",    (1//2, 1//2), (0, 1),      2, 2, 1//2),
+    )
+    for (label, a, b, m, n, z) in cases, T in (Float32, Float64, BigFloat)
+        label == "contour fallback" && T === BigFloat && continue
+        v = meijerg(T.(a), T.(b), m, n, T(z))
+        @test v isa T
+        vc = meijerg(T.(a), T.(b), m, n, Complex{T}(z))
+        @test vc isa Complex{T}
+    end
+    # integer input promotes to Float64 (no integer zero from exact cancellations)
+    @test meijerg((1, 2), (0, 1), 1, 1, 2) isa Float64
+    for f in (meijerg, meijerg_slater, meijerg_contour)
+        @test f((-1,), (0, 2), 1, 1, 1) isa Float64
+    end
+    @test meijerg_laurent((-1,), (0, 1), 2, 1, 1) isa Float64
+    @test meijerg_laurent((0.3,), (0.2, 1.2), 2, 1, 0.5) isa Float64
+    @test meijerg_contour((0.3,), (0.2, 1.1), 1, 1, 0.7) isa Float64
+end

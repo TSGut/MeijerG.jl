@@ -6,5 +6,8 @@ HypergeometricFunctions = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
 Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
 MeijerG = "c1979943-378d-4dac-9c37-200771e290c3"
 
+[sources]
+MeijerG = {path = ".."}
+
 [compat]
 Documenter = "1"

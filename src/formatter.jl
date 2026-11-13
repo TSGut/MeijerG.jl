@@ -26,12 +26,18 @@ macro formatter(expr, verbose=true)
     func_name = expr.args[1]
     args = expr.args[2:end]
 
-    # Check if the function is `meijerg`
-    if func_name != :meijerg
+    # Check if the function is `meijerg` (also accept the qualified `MeijerG.meijerg`)
+    is_meijerg = func_name == :meijerg ||
+        (func_name isa Expr && func_name.head == :. && func_name.args[end] == QuoteNode(:meijerg))
+    if !is_meijerg
         throw(error("@formatter can only be applied to `meijerg` function calls"))
     end
 
-    esc(:( meijerg_to_latex_and_math($(args...), verbose=$(verbose)) ))
+    if verbose isa Expr && verbose.head == :(=) && verbose.args[1] == :verbose
+        verbose = verbose.args[2]
+    end
+
+    return :( $(meijerg_to_latex_and_math)($(map(esc, args)...); verbose=$(esc(verbose))) )
 end
 
 """
@@ -66,12 +72,12 @@ function meijerg_to_latex_and_math(args...; verbose=true)
         a_str = isempty(a) ? "" : join(a, ", ")
         b_str = isempty(b) ? "" : join(b, ", ")
 
-        plaintext = "G_{" * string(length(b)) * "," * string(length(a)) * "}^{" * string(m) * "," * string(n) * "}(" * string(z) * " | " * a_str * " ; " * b_str * ")"
+        plaintext = "G_{" * string(length(a)) * "," * string(length(b)) * "}^{" * string(m) * "," * string(n) * "}(" * string(z) * " | " * a_str * " ; " * b_str * ")"
 
         # LaTeX: use an array/matrix for the stacked parameters so the output is copy-pasteable
         a_tex = isempty(a) ? "" : join(map(string, a), ", ")
         b_tex = isempty(b) ? "" : join(map(string, b), ", ")
-        latex = "G_{" * string(length(b)) * "," * string(length(a)) * "}^{" * string(m) * "," * string(n) * "}\\left(" * string(z) * "\\;\\middle|\\begin{matrix}" * a_tex * "\\\\" * b_tex * "\\end{matrix}\\right)"
+        latex = "G_{" * string(length(a)) * "," * string(length(b)) * "}^{" * string(m) * "," * string(n) * "}\\left(" * string(z) * "\\;\\middle|\\begin{matrix}" * a_tex * "\\\\" * b_tex * "\\end{matrix}\\right)"
         mathematica = "MeijerG[{{" * join(a[1:n], ", ") * "}, {" * join(a[n+1:end], ", ") * "}}, {{" * join(b[1:m], ", ") * "}, {" * join(b[m+1:end], ", ") * "}}, " * string(z) * "]"
     else
         # Split parameter form: (a_left, a_right, b_left, b_right, z)
@@ -89,12 +95,12 @@ function meijerg_to_latex_and_math(args...; verbose=true)
         a_str = isempty(a) ? "" : join(a, ", ")
         b_str = isempty(b) ? "" : join(b, ", ")
 
-        plaintext = "G_{" * string(length(b)) * "," * string(length(a)) * "}^{" * string(m) * "," * string(n) * "}(" * string(z) * " | " * a_str * " ; " * b_str * ")"
+        plaintext = "G_{" * string(length(a)) * "," * string(length(b)) * "}^{" * string(m) * "," * string(n) * "}(" * string(z) * " | " * a_str * " ; " * b_str * ")"
 
         # LaTeX output using matrix for stacked parameters (split-form)
         a_tex = isempty(a) ? "" : join(map(string, a), ", ")
         b_tex = isempty(b) ? "" : join(map(string, b), ", ")
-        latex = "G_{" * string(length(b)) * "," * string(length(a)) * "}^{" * string(m) * "," * string(n) * "}\\left(" * string(z) * "\\;\\middle|\\begin{matrix}" * a_tex * "\\\\" * b_tex * "\\end{matrix}\\right)"
+        latex = "G_{" * string(length(a)) * "," * string(length(b)) * "}^{" * string(m) * "," * string(n) * "}\\left(" * string(z) * "\\;\\middle|\\begin{matrix}" * a_tex * "\\\\" * b_tex * "\\end{matrix}\\right)"
         mathematica = "MeijerG[{{" * join(a_left, ", ") * "}, {" * join(a_right, ", ") * "}}, {{" * join(b_left, ", ") * "}, {" * join(b_right, ", ") * "}}, " * string(z) * "]"
     end
 

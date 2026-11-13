@@ -3,7 +3,7 @@
 `MeijerG.jl` includes a reduction system through the main public function `meijerg(...)`.
 This function attempts to recognize special cases and reduce them to elementary or well-known
 special functions, then falls back to the pure residue-expansion evaluator `meijerg_slater(...)`
-if no match is found.
+or guarded confluence evaluators if no match is found.
 
 ## Overview
 
@@ -19,7 +19,7 @@ The reduction system currently handles the following categories:
 3. **Bessel-family reductions**: Bessel J, Bessel K, and the order-0 I continuation
 4. **Error/incomplete-gamma reductions**: erf, erfc, lower gamma, upper gamma
 5. **Orthogonal polynomials**: Laguerre, Hermite, Jacobi
-6. **Logarithmic confluent-pole reduction**: `log1p(z)/z`
+6. **Logarithmic confluent-pole reduction**: `log1p(z)`
 
 ## API: `meijerg`
 
@@ -29,8 +29,9 @@ result = meijerg(a_left, a_right, b_left, b_right, z)
 ```
 
 If a reduction rule matches, the result is returned directly.
-If a confluent-pole case is detected, `meijerg` delegates to the private perturbation routine.
-Otherwise, `meijerg` delegates to `meijerg_slater` for pure residue evaluation.
+If a supported active-pole confluence is detected, `meijerg` uses the private
+log-ratio jet evaluator. Otherwise, `meijerg` delegates to `meijerg_slater` for
+ordinary residue evaluation and then to contour integration if Slater fails.
 
 ## Category 1: Order Cancellation
 
@@ -93,7 +94,7 @@ For the special order-zero case, the implementation uses
 G_{0,2}^{1,0}\!\left(z\;\middle|\;\begin{matrix} - \\ 0, 0 \end{matrix}\right) = I_0(2\sqrt{-z}), \quad z < 0 \text{ real}
 ```
 
-**Mapping**: `meijerg((), (), (0, 0), (), z)` for negative real `z` → `besseli(0, 2*sqrt(-z))`
+**Mapping**: `meijerg((), (), (0,), (0,), z)` for negative real `z` → `besseli(0, 2*sqrt(-z))`
 
 ### Modified Bessel K: $K_\nu(x)$
 
@@ -105,11 +106,11 @@ The implementation supports the symmetric identity and the shifted-parameter for
 
 ```math
 G_{0,2}^{2,0}\!\left(z\;\middle|\;\begin{matrix} - \\ b_1, b_2 \end{matrix}\right)
-= z^{-c} 2K_\nu(2\sqrt{z}),
+= z^c 2K_\nu(2\sqrt{z}),
 \quad c = \frac{b_1+b_2}{2},\; \nu = |b_1-b_2|
 ```
 
-**Mapping**: `meijerg((), (), (b1, b2), (), z)` → `z^(-c) * 2*besselk(ν, 2*sqrt(z))`
+**Mapping**: `meijerg((), (), (b1, b2), (), z)` → `z^c * 2*besselk(ν, 2*sqrt(z))`
 
 ## Category 4: Error Functions and Incomplete Gamma
 
@@ -124,10 +125,10 @@ G_{1,2}^{1,1}\!\left(z\;\middle|\;\begin{matrix}1\\1/2,0\end{matrix}\right)=\sqr
 ### Complementary Error Function: $\mathrm{erfc}(x)$
 
 ```math
-G_{1,2}^{2,1}\!\left(z\;\middle|\;\begin{matrix}1\\1/2,0\end{matrix}\right)=\sqrt{\pi}\,\mathrm{erfc}(\sqrt{z})
+G_{1,2}^{2,0}\!\left(z\;\middle|\;\begin{matrix}1\\1/2,0\end{matrix}\right)=\sqrt{\pi}\,\mathrm{erfc}(\sqrt{z})
 ```
 
-**Mapping**: `meijerg((1,), (), (0.5, 0), (), z)` → `sqrt(pi)*erfc(sqrt(z))`
+**Mapping**: `meijerg((), (1,), (0.5, 0), (), z)` → `sqrt(pi)*erfc(sqrt(z))`
 
 ### Lower Incomplete Gamma: $\gamma(a,z)$
 
@@ -140,10 +141,10 @@ G_{1,2}^{1,1}\!\left(z\;\middle|\;\begin{matrix}1\\a,0\end{matrix}\right)=\gamma
 ### Upper Incomplete Gamma: $\Gamma(a,z)$
 
 ```math
-G_{1,2}^{2,1}\!\left(z\;\middle|\;\begin{matrix}1\\a,0\end{matrix}\right)=\Gamma(a,z)
+G_{1,2}^{2,0}\!\left(z\;\middle|\;\begin{matrix}1\\a,0\end{matrix}\right)=\Gamma(a,z)
 ```
 
-**Mapping**: `meijerg((1,), (), (a, 0), (), z)` → `gamma(a, z)`
+**Mapping**: `meijerg((), (1,), (a, 0), (), z)` → `gamma(a, z)`
 
 ## Category 5: Orthogonal Polynomials
 
@@ -154,7 +155,7 @@ G_{1,2}^{1,0}\!\left(z\;\middle|\;\begin{matrix}n+1\\0,-\alpha\end{matrix}\right
 = \frac{L_n^{(\alpha)}(z)}{\Gamma(n+\alpha+1)},\quad n\in\mathbb{Z}_{\ge 0}
 ```
 
-**Mapping**: `meijerg((n+1,), (), (0,), (-α,), z)` → `laguerrel(n, α, z) / gamma(n+α+1)`
+**Mapping**: `meijerg((), (n+1,), (0,), (-α,), z)` → `laguerrel(n, α, z) / gamma(n+α+1)`
 
 ### Hermite (via Laguerre specializations)
 
@@ -179,15 +180,15 @@ With `x = 2z + 1` in the implementation,
 
 Confluent-pole Meijer G-functions arise when parameters have integer differences, leading to
 logarithmic singularities in the residue expansion. For recognized cases, the reduction system
-uses direct special-function formulas instead of the generic perturbation path.
+uses direct special-function formulas instead of the generic residue/confluence path.
 
-### Logarithm of (1+z): $\log(1 + z) / z$
+### Logarithm of (1+z): $\log(1 + z)$
 
 ```math
-G_{2,2}^{1,2}\!\left(z\;\middle|\;\begin{matrix} 1, 1 \\ 1, 0 \end{matrix}\right) = \frac{\log(1+z)}{z}
+G_{2,2}^{1,2}\!\left(z\;\middle|\;\begin{matrix} 1, 1 \\ 1, 0 \end{matrix}\right) = \log(1+z)
 ```
 
-**Mapping**: `meijerg((1, 1), (1, 0), 1, 2, z)` → `log1p(z) / z`
+**Mapping**: `meijerg((1, 1), (1, 0), 1, 2, z)` → `log1p(z)`
 
 ## What about the many G → hypergeometric reductions?
 

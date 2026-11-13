@@ -1,30 +1,6 @@
 @testset "Core polyalgorithm" begin
     relerr(x, y) = abs(x - y) / max(abs(y), eps(typeof(abs(y))))
 
-    @testset "Confluence risk heuristic" begin
-        # Single active parameter: no pairs, risk is always zero.
-        @test MeijerG._confluence_risk((0.5,), (0.3,), 1, 1, :lower) == 0.0
-
-        # Parameters at intermediate distance from integer difference (diff = 0.9, frac = 0.1):
-        # risk should be in the transition band.
-        risk_transition = MeijerG._confluence_risk((0.5,), (0.2, 1.1), 2, 1, :lower)
-        @test 0.0 < risk_transition < 1.0
-
-        # Parameters with exact integer difference (frac = 0.0 < 0.05): risk = 1.
-        @test MeijerG._confluence_risk((0.5,), (0.0, 1.0), 2, 1, :lower) == 1.0
-
-        # Near-integer difference (diff = 1.0, params 0.01 and 1.01, frac = 0.0): risk = 1.
-        @test MeijerG._confluence_risk((0.5,), (0.01, 1.01), 2, 1, :lower) == 1.0
-
-        # Intermediate distance (frac ≈ 0.13, between thresholds): risk strictly between 0 and 1.
-        risk_mid = MeijerG._confluence_risk((0.5,), (0.0, 0.87), 2, 1, :lower)
-        @test 0.0 < risk_mid < 1.0
-
-        # Upper mode checks a[1:n], not b.
-        @test MeijerG._confluence_risk((0.01, 1.01), (0.5,), 1, 2, :upper) == 1.0
-        @test MeijerG._confluence_risk((0.3, 1.6), (0.5,), 1, 2, :upper) == 0.0
-    end
-
     @testset "Slater path: low confluence risk, all input types" begin
         a, b, m, n, z = (0.5,), (0.2, 0.9), 2, 1, 0.5
         # High-precision reference via BigFloat.
@@ -38,7 +14,7 @@
         @test isfinite(result_f64)
         @test relerr(BigFloat(result_f64), ref) < big"1e-12"
 
-        # Complex{Float64}: real input path returns complex type; real part matches.
+        # Complex{Float64}: real input path returns complex type, real part matches.
         result_c64 = meijerg(a, b, m, n, z + 0im)
         @test result_c64 isa Complex{Float64}
         @test abs(result_c64 - result_f64) < 1e-12
@@ -111,6 +87,23 @@
     end
 end
 
+@testset "Non-finite Slater results fall back to contour" begin
+    # Balanced (p == q) confluent geometries are outside the log-ratio jet
+    # scope and make raw Slater return Inf/NaN. meijerg should not return that.
+    # References: mpmath at 30 digits.
+    cases = (
+        (((0.5, 0.5), (0, 0), 2, 2, 0.5), 11.649494770833713188),
+        (((0.5, 0.5), (0, 1), 2, 2, 0.5), 2.6615984032139112661),
+        (((0.5, 1.5), (0.2, 0.1), 1, 2, 2.0), -8.5841561929703619733),
+        (((1.329, -0.407), (0.872, 1.872), 2, 1, 0.46946936645877857), 0.037179718359677448818),
+    )
+    for (args, ref) in cases
+        v = meijerg(args...)
+        @test isfinite(v)
+        @test v ≈ ref rtol=1e-8
+    end
+end
+
 @testset "High-precision checks" begin
     @testset "BigFloat identities" begin
         setprecision(256) do
@@ -148,7 +141,7 @@ end
         relerr(x, y) = abs(x - y) / max(abs(y), eps(typeof(abs(y))))
         # Higher precision improves relative error.
         @test relerr(fine, reference) < relerr(coarse, reference)
-        # Fine precision reaches target tolerance.
+        # Require near-full 512-bit accuracy (eps(512 bits) ≈ 1.5e-154).
         @test relerr(fine, reference) < big"1e-150"
     end
 end

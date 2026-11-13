@@ -6,19 +6,23 @@
 G_{p,q}^{m,n}\left(z\;\middle|\;\begin{matrix}a_1,\ldots,a_p \\ b_1,\ldots,b_q\end{matrix}\right)
 ```
 
-using residue-based expansions through `HypergeometricFunctions.jl` and
-`SpecialFunctions.jl`.
+using residue-based expansions through `HypergeometricFunctions.jl`,
+Gamma-family arithmetic from `Gamma.jl` and Bessel reductions
+from `Bessels.jl`.
 
 ## Features
 
-- Supports `Float64`, `BigFloat`, and complex versions.
+- Supports `Float32`, `Float64`, `BigFloat`, and their complex versions.
 - Supports both full-index and split-parameter calling conventions.
 - Includes a formatter macro to convert Julia `meijerg()` calls to plaintext, LaTeX and Wolfram Mathematica compatible forms.
-- Uses automatic reductions for common special cases and perturbation for confluent poles.
-- Three exported evaluation modes:
-  - `meijerg(...)`: Recommended polyalgorithm API with reductions, perturbation handling, and Slater fallback
-  - `meijerg_slater(...)`: Pure Slater residue evaluation without reductions or perturbation
+- Uses automatic reductions for common special cases and guarded log-ratio jets for supported active-pole confluence.
+- Evaluates ill-conditioned residue sums in double-double working precision by default (without use of `BigFloat`).
+- Exported evaluation modes:
+  - `meijerg(...)`: Recommended polyalgorithm API with reductions, log-ratio jets, Slater, and contour fallback
+  - `meijerg_slater(...)`: Pure Slater residue evaluation without reductions or confluence handling
+  - `meijerg_jet(...)`: Standalone log-ratio jet evaluator for confluent active poles, with a choice of working precision
   - `meijerg_contour(...)`: Numerical contour-integral evaluation of the Mellin-Barnes definition
+  - `meijerg_laurent(...)`: Standalone exact-confluence Laurent/log-polynomial evaluator
 
 ## Quick usage
 

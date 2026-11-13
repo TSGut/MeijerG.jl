@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use MeijerG.jl in your research, please cite the archived software using the metadata below."
+title: "MeijerG.jl: Numerical evaluation of the Meijer G-function in Julia"
+type: software
+authors:
+  - family-names: Gutleb
+    given-names: Timon S.
+    affiliation: University of Leeds
+    email: T.S.Gutleb@leeds.ac.uk
+doi: 10.5281/zenodo.19430427
+repository-code: "https://github.com/TSGut/MeijerG.jl"
+url: "https://doi.org/10.5281/zenodo.19430427"
+license: MIT
+keywords:
+  - Julia
+  - Meijer G-function
+  - special functions
+  - numerical analysis
+  - Mellin-Barnes integrals
+abstract: >-
+  MeijerG.jl is a Julia package for numerical evaluation of the Meijer
+  G-function using a guarded polyalgorithm of special-function reductions,
+  Slater residue expansions, confluence-aware evaluation, and numerical
+  Mellin-Barnes contour integration.

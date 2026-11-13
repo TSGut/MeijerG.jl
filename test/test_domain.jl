@@ -1,4 +1,3 @@
-include("test_utilities.jl")
 
 @testset "Domain behavior" begin
     @testset "Inputs" begin
@@ -52,8 +51,21 @@ include("test_utilities.jl")
         # Real input that would require a complex branch should throw,
         # mirroring Julia's standard real/complex behavior.
         @test_throws DomainError meijerg((), (1, 0), 2, 0, -1.0)
+        # Same for the general (non-reduction) path, including BigFloat and
+        # p == q near |z| = 1, which must not return NaN.
+        @test_throws DomainError meijerg((0.3,), (0.2, 1.7), 1, 1, -0.5)
+        @test_throws DomainError meijerg((big"0.3",), (big"0.2", big"1.7"), 1, 1, big"-0.5")
+        @test_throws DomainError meijerg((0.3, 0.8), (0.2, 1.1), 1, 1, -1.0)
+        @test_throws DomainError meijerg((0.3, 0.8), (0.2, 1.1), 1, 1, -0.99)
+        # meijerg_slater directly: BigFloat must throw like Float64 rather than return NaN
+        @test_throws DomainError meijerg_slater((0.3,), (0.2, 1.7), 1, 1, -0.5)
+        @test_throws DomainError meijerg_slater((big"0.3",), (big"0.2", big"1.7"), 1, 1, big"-0.5")
+        @test_throws DomainError meijerg_slater((0.3, 0.8), (0.2, 1.1), 1, 1, -1.0)
+        # integer exponents stay real-valued on the negative axis
+        @test isfinite(meijerg_slater((), (big"0", big"1"), 1, 0, big"-0.5"))
         # Explicit complex input should evaluate on the complex branch.
         @test meijerg((), (1, 0), 2, 0, -1.0 + 0im) isa Complex
+        @test isfinite(meijerg((0.3, 0.8), (0.2, 1.1), 1, 1, -1.0 + 0im))
     end
 
     @testset "A compact support test" begin

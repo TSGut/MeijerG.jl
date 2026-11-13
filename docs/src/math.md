@@ -25,8 +25,9 @@ generalized hypergeometric functions instead because accurate contour integratio
 
 When poles in the selected residue family are confluent, meaning integer-separated
 parameters in the active set, Slater's hypergeometric series expansion fails.
-`MeijerG.jl` evaluates these cases by a parameter-perturbation limit of the
-same residue representation instead. If all else has failed, the package resorts to contour integration.
+`MeijerG.jl` evaluates supported active-pole confluence by log-ratio jets, which
+group the colliding residue streams coefficient-wise and avoid subtracting
+singular Slater terms. If this fails, the package uses contour integration.
 
 ## Slater's Lower Expansion
 
@@ -85,21 +86,21 @@ Before computation, the implementation removes cancelling $\Gamma$ factors:
 - If $a_k = b_j$ for some $k \le n$ and $j > m$, remove both parameters and decrement $(p, q, n)$ by one.
 - If $a_k = b_j$ for some $k > n$ and $j \le m$, remove both parameters and decrement $(p, q, m)$ by one.
 
-## Adaptive Perturbation for Confluent Poles
+## Confluent Active Poles
 
 When residue-based expansions (Slater lower/upper) encounter confluent poles the associated $\Gamma$ denominators vanish and the standard expansion formula becomes indeterminate. 
 
-As mentioned above `MeijerG.jl` handles this by **adaptive perturbation**: a parameter-regularization technique that computes
-the desired G-function as a limit. For confluent cases, a small perturbation $\delta \ll 1$ is applied deterministically to the active parameter family. In lower mode, the active $b$-parameters are shifted symmetrically about their center index; in upper mode, the active $a$-parameters are shifted the same way. At each refinement level the expansion is evaluated at four symmetric offsets $\{-\delta, -\delta/2, \delta/2, \delta\}$, and a Lagrange interpolation in the perturbation variable is used to estimate the $\delta \to 0$ limit.
+The default evaluator handles validated exact and near active-pole confluence
+with log-ratio jets. The exact limit agrees with the corresponding Laurent
+residue/log-polynomial value, while the punctured near-confluent path computes
+the divided log-ratio of paired residue coefficients directly. Within `meijerg` this
+path is guarded. Unsupported multiplicities, overlapping clusters, and
+finite balanced branch-connection cases fall through to the ordinary Slater and
+contour fallback sequence.
 
-The perturbation approach:
-
-1. Computes the Slater expansion at four symmetrically perturbed parameter sets.
-2. Refines by halving the perturbation magnitude.
-3. Uses Lagrange interpolation at perturbation value $0$ to estimate the confluent limit at each refinement level.
-4. Terminates when successive refinement levels agree within the user-requested relative and absolute tolerances.
-
-If perturbation fails to converge after a configurable number of refinement levels (default: 8), the package falls back to direct Mellin-Barnes contour integration using [QuadGK.jl](https://github.com/JuliaMath/QuadGK.jl).
+The standalone `meijerg_jet(...)` API evaluates the jets directly, without fallback,
+and `meijerg_laurent(...)` exposes exact-confluence Laurent residue evaluation for
+power users.
 
 ## References
 

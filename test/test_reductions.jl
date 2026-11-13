@@ -1,7 +1,15 @@
 using HypergeometricFunctions: pFq
+import Bessels
 using ClassicalOrthogonalPolynomials: laguerrel, hermiteh, jacobip
 using SpecialFunctions: gamma, besselj, besselk, besseli, erf, erfc
-include("test_utilities.jl")
+
+function big_slater_reference(a, b, m, n, z)
+    return setprecision(BigFloat, 512) do
+        a_big = map(BigFloat, a)
+        b_big = map(BigFloat, b)
+        meijerg_slater(a_big, b_big, m, n, BigFloat(z))
+    end
+end
 
 @testset "Supported explicit reductions" begin
     @testset "Order cancellation" begin
@@ -76,13 +84,14 @@ include("test_utilities.jl")
             ν = 0.8
             for z in sample_real_points((0.15, 1.2, 2.4); seed=109, lo=0.1, hi=2.8)
                 lhs = meijerg((), (), (ν / 2,), (-ν / 2,), z)
-                rhs = besselj(ν, 2 * sqrt(z))
-                @test lhs ≈ rhs rtol=1e-14
+                reference = big_slater_reference(
+                    (), (ν / 2, -ν / 2), 1, 0, z)
+                @test lhs ≈ reference rtol=big"2e-14"
             end
             for zb in BigFloat.(sample_real_points((0.15, 1.2, 2.4); seed=110, lo=0.1, hi=2.8))
-                # Until SpecialFunctions supports the BigFloat combination required by the
-                # explicit Bessel-J formula, this reduction must fall back to Slater.
-                @test_throws MethodError besselj(ν, 2 * sqrt(zb))
+                # Bessels.jl 0.2.8 has no BigFloat general-order method, so
+                # this reduction must fall back to Slater.
+                @test_throws MethodError Bessels.besselj(ν, 2 * sqrt(zb))
                 @test meijerg((), (), (ν / 2,), (-ν / 2,), zb) ≈
                       meijerg_slater((), (), (ν / 2,), (-ν / 2,), zb) atol=big"1e-28" rtol=big"1e-28"
             end
@@ -102,12 +111,17 @@ include("test_utilities.jl")
             ν = 0.8
             for z in sample_real_points((0.15, 1.2, 2.4); seed=112, lo=0.1, hi=2.8)
                 lhs = meijerg((), (), (ν / 2, -ν / 2), (), z)
-                rhs = 2 * besselk(ν, 2 * sqrt(z))
-                @test lhs ≈ rhs rtol=1e-14
+                reference = big_slater_reference(
+                    (), (ν / 2, -ν / 2), 2, 0, z)
+                @test lhs ≈ reference rtol=big"2e-14"
 
                 lhs_shifted = meijerg((), (), (0.3, -0.5), (), z)
-                rhs_shifted = z^(0.1) * 2 * besselk(0.8, 2 * sqrt(z))
-                @test lhs_shifted ≈ rhs_shifted rtol=1e-14
+                shifted_reference = setprecision(BigFloat, 512) do
+                    b1 = BigFloat(0.3)
+                    b2 = BigFloat(-0.5)
+                    BigFloat(z)^((b1 + b2) / 2) * reference
+                end
+                @test lhs_shifted ≈ shifted_reference rtol=big"2e-14"
             end
             for zc in sample_complex_points((0.25 + 0.1im, 0.9 - 0.15im);
                                             seed=114,
@@ -125,7 +139,10 @@ include("test_utilities.jl")
             ν = 0.0
             for x in sample_real_points((0.05, 0.7, 2.0); seed=115, lo=0.02, hi=3.0)
                 z = -x^2 / 4
-                @test meijerg((), (), (ν / 2,), (-ν / 2,), z) ≈ besseli(ν, x) atol=1e-11 rtol=1e-12
+                value = meijerg((), (), (ν / 2,), (-ν / 2,), z)
+                reference = big_slater_reference(
+                    (), (ν / 2, -ν / 2), 1, 0, z)
+                @test value ≈ reference rtol=big"2e-14"
             end
         end
 
@@ -134,25 +151,70 @@ include("test_utilities.jl")
                 z = x^3 / 9
                 g_val = meijerg((), (), (1 / 6, -1 / 6), (), z)
                 ai_api = (1 / (2 * pi)) * sqrt(x / 3) * g_val
-                ai_expected = (1 / pi) * sqrt(x / 3) * besselk(1 / 3, (2 / 3) * x^(3 / 2))
-                @test ai_api ≈ ai_expected atol=1e-11 rtol=1e-12
+                g_reference = big_slater_reference(
+                    (), (1 / 6, -1 / 6), 2, 0, z)
+                ai_reference = (inv(BigFloat(2) * big(pi)) *
+                                sqrt(BigFloat(x) / 3) * g_reference)
+                @test ai_api ≈ ai_reference rtol=big"2e-14"
             end
         end
     end
 
     @testset "Error and incomplete-gamma reductions" begin
+        # The in-package erf/erfc go through the regularized incomplete gamma
+        # (P, Q) at a = 1/2. SpecialFunctions is the independent reference.
+        @testset "Internal _erf / _erfc vs SpecialFunctions" begin
+            for x in sample_real_points((-3.5, -0.4, 0.4, 3.5, 8.0); seed=126, lo=-12.0, hi=12.0)
+                @test MeijerG._erf(x) ≈ erf(x) rtol=1e-13
+                @test MeijerG._erfc(x) ≈ erfc(x) rtol=1e-12
+            end
+
+            # Full complex plane, including the left half-plane that the
+            # Meijer-G reductions themselves never reach (they feed sqrt(z)).
+            for re in -3.0:1.0:3.0, im in -3.0:1.0:3.0
+                w = complex(re, im)
+                @test MeijerG._erf(w) ≈ erf(w) atol=1e-13 rtol=1e-13
+                @test MeijerG._erfc(w) ≈ erfc(w) atol=1e-13 rtol=1e-13
+            end
+
+            # Tail accuracy: erfc must stay relatively accurate where erf saturates.
+            for x in (5.0, 10.0, 20.0, 26.0)
+                @test MeijerG._erfc(x) ≈ erfc(x) rtol=1e-12
+            end
+
+            # Small-argument branch, where w^2 underflows and 2w/sqrt(pi) takes over.
+            for x in (0.0, -0.0, 1e-30, -1e-30, 1e-200, -1e-300)
+                @test MeijerG._erf(x) ≈ erf(x) atol=0 rtol=1e-14
+                @test MeijerG._erfc(x) ≈ erfc(x) rtol=1e-14
+            end
+
+            @test MeijerG._erf(Inf) == 1.0
+            @test MeijerG._erf(-Inf) == -1.0
+            @test MeijerG._erfc(Inf) == 0.0
+            @test MeijerG._erfc(-Inf) == 2.0
+
+            # Type propagation and extended precision.
+            @test MeijerG._erf(1) isa Float64
+            @test MeijerG._erf(big"0.5") isa BigFloat
+            @test MeijerG._erf(0.5 + 0.25im) isa ComplexF64
+            @test Float64(MeijerG._erf(big"0.5")) ≈ erf(0.5) rtol=1e-15
+            for xb in (big"0.25", big"1.5", big"4.0", big"-2.25")
+                @test MeijerG._erf(xb) + MeijerG._erfc(xb) ≈ one(xb) atol=big"1e-70"
+            end
+        end
+
         @testset "erf / erfc half-order reductions" begin
             for x in sample_real_points((0.1, 0.6, 1.5); seed=118, lo=0.05, hi=2.0)
                 z = x^2
                 erf_api = meijerg((1.0,), (0.5, 0.0), 1, 1, z) / sqrt(pi)
-                erfc_api = meijerg((1.0,), (0.5, 0.0), 2, 1, z) / sqrt(pi)
+                erfc_api = meijerg((1.0,), (0.5, 0.0), 2, 0, z) / sqrt(pi)
                 @test erf_api ≈ erf(x) atol=1e-12 rtol=1e-12
                 @test erfc_api ≈ erfc(x) atol=1e-12 rtol=1e-12
             end
 
             for zb in BigFloat.(sample_real_points((0.1, 0.6, 1.5); seed=119, lo=0.05, hi=2.0)).^2
                 erf_big = meijerg((BigFloat(1),), (big"0.5", big"0.0"), 1, 1, zb) / sqrt(big(pi))
-                erfc_big = meijerg((BigFloat(1),), (big"0.5", big"0.0"), 2, 1, zb) / sqrt(big(pi))
+                erfc_big = meijerg((BigFloat(1),), (big"0.5", big"0.0"), 2, 0, zb) / sqrt(big(pi))
                 @test erf_big ≈ erf(sqrt(zb)) atol=big"1e-28" rtol=big"1e-28"
                 @test erfc_big ≈ erfc(sqrt(zb)) atol=big"1e-28" rtol=big"1e-28"
             end
@@ -164,7 +226,7 @@ include("test_utilities.jl")
                                             imag_lo=-0.3,
                                             imag_hi=0.3)
                 erf_complex = meijerg((1.0,), (0.5, 0.0), 1, 1, zc) / sqrt(pi)
-                erfc_complex = meijerg((1.0,), (0.5, 0.0), 2, 1, zc) / sqrt(pi)
+                erfc_complex = meijerg((1.0,), (0.5, 0.0), 2, 0, zc) / sqrt(pi)
                 @test erf_complex ≈ erf(sqrt(zc)) atol=1e-12 rtol=1e-12
                 @test erfc_complex ≈ erfc(sqrt(zc)) atol=1e-12 rtol=1e-12
             end
@@ -174,15 +236,20 @@ include("test_utilities.jl")
             a = 0.7
             for z in sample_real_points((0.2, 1.3, 2.8); seed=121, lo=0.1, hi=3.0)
                 lower_result = meijerg((1.0,), (a, 0.0), 1, 1, z)
-                upper_result = meijerg((1.0,), (a, 0.0), 2, 1, z)
-                @test lower_result ≈ gamma(a) - gamma(a, z) rtol=1e-14
-                @test upper_result ≈ gamma(a, z) rtol=1e-14
+                upper_result = meijerg((1.0,), (a, 0.0), 2, 0, z)
+                # SpecialFunctions' gamma(a, z) itself is off the 256-bit value by up to
+                # ~4e-14 at some z.
+                @test lower_result ≈ gamma(a) - gamma(a, z) rtol=1e-13
+                @test upper_result ≈ gamma(a, z) rtol=1e-13
             end
+            # G^{2,1}_{1,2}(z | 1 ; a, 0) is undefined (a_1 - b_2 = 1): no reduction, rejected
+            @test_throws DomainError meijerg((1.0,), (a, 0.0), 2, 1, 0.8)
+            @test_throws DomainError meijerg((1.0,), (0.5, 0.0), 2, 1, 0.8)
 
             ab = big"0.7"
             for zb in BigFloat.(sample_real_points((0.2, 1.3, 2.8); seed=122, lo=0.1, hi=3.0))
                 lower_big = meijerg((BigFloat(1),), (ab, big"0.0"), 1, 1, zb)
-                upper_big = meijerg((BigFloat(1),), (ab, big"0.0"), 2, 1, zb)
+                upper_big = meijerg((BigFloat(1),), (ab, big"0.0"), 2, 0, zb)
                 @test lower_big ≈ gamma(ab) - gamma(ab, zb) atol=big"1e-28" rtol=big"1e-28"
                 @test upper_big ≈ gamma(ab, zb) atol=big"1e-28" rtol=big"1e-28"
             end
@@ -194,7 +261,7 @@ include("test_utilities.jl")
                                             imag_lo=-0.4,
                                             imag_hi=0.4)
                 lower_complex = meijerg((1.0,), (a, 0.0), 1, 1, zc)
-                upper_complex = meijerg((1.0,), (a, 0.0), 2, 1, zc)
+                upper_complex = meijerg((1.0,), (a, 0.0), 2, 0, zc)
                 @test lower_complex ≈ gamma(a) - gamma(a, zc) atol=1e-12 rtol=1e-12
                 @test upper_complex ≈ gamma(a, zc) atol=1e-12 rtol=1e-12
             end
@@ -202,6 +269,48 @@ include("test_utilities.jl")
     end
 
     @testset "Orthogonal-polynomial reductions" begin
+        @testset "Internal scalar recurrence parity" begin
+            laguerre_cases = (
+                (0, 0.2, -0.7),
+                (1, 0.7, 0.3),
+                (6, 1.3, 2.1),
+                (5, big"0.7", big"-0.4"),
+            )
+            for (degree, α, x) in laguerre_cases
+                @test isequal(
+                    MeijerG._laguerrel(degree, α, x),
+                    laguerrel(degree, α, x))
+            end
+
+            jacobi_cases = (
+                (0, 0.35, 0.6, -0.7),
+                (1, 0.35, 0.6, 0.3),
+                (6, 0.35, 0.6, 0.8),
+                (5, big"0.35", big"0.6", big"-0.4"),
+            )
+            for (degree, α, β, x) in jacobi_cases
+                @test isequal(
+                    MeijerG._jacobip(degree, α, β, x),
+                    jacobip(degree, α, β, x))
+            end
+
+            # ClassicalOrthogonalPolynomials does not accept complex scalar
+            # arguments here, so check that extension independently through
+            # the terminating hypergeometric definitions.
+            n = 6
+            α = 0.35
+            β = 0.6
+            z = 0.2 + 0.3im
+            laguerre_reference =
+                gamma(n + α + 1) / (gamma(α + 1) * gamma(n + 1)) *
+                pFq((-n,), (α + 1,), z)
+            jacobi_reference =
+                gamma(n + α + 1) / (gamma(α + 1) * gamma(n + 1)) *
+                pFq((-n, n + α + β + 1), (α + 1,), (1 - z) / 2)
+            @test MeijerG._laguerrel(n, α, z) ≈ laguerre_reference rtol=2e-14
+            @test MeijerG._jacobip(n, α, β, z) ≈ jacobi_reference rtol=2e-14
+        end
+
         @testset "Generalized Laguerre" begin
             x_values = sample_real_points((-1.4, -0.3, 0.4, 1.2, 2.3); seed=124, lo=-1.5, hi=2.6)
             for α in (0.2, 0.7, 1.3)
@@ -232,7 +341,8 @@ include("test_utilities.jl")
                 for x in x_values
                     g_even = meijerg((n + 1.0,), (0.0, 0.5), 1, 0, x^2)
                     h_even = (-1)^n * factorial(big(2n)) * sqrt(big(pi)) * g_even
-                    @test h_even ≈ hermiteh(2n, x) atol=1e-14 rtol=1e-14
+                    # The Float64 reduction loses about a digit for n >= 3, |x| > 1.
+                    @test h_even ≈ hermiteh(2n, x) atol=1e-13 rtol=1e-13
 
                     g_odd = meijerg((n + 1.0,), (0.0, -0.5), 1, 0, x^2)
                     h_odd = (-1)^n * factorial(big(2n + 1)) * x * sqrt(big(pi)) * g_odd
@@ -309,19 +419,19 @@ include("test_utilities.jl")
     @testset "Logarithmic confluent-pole reduction" begin
         for z in sample_real_points((-0.7, -0.2, 0.05, 0.3, 0.9); seed=160, lo=-0.85, hi=0.95)
             result = meijerg((1.0, 1.0), (1.0, 0.0), 1, 2, z)
-            expected = log1p(z) / z
+            expected = log1p(z)
             @test result ≈ expected rtol=1e-14
         end
 
         for z_small in sample_real_points((1e-12, 1e-10, 1e-8); seed=161, lo=1e-12, hi=1e-8)
             result_small = meijerg((1.0, 1.0), (1.0, 0.0), 1, 2, z_small)
-            expected_small = log1p(z_small) / z_small
+            expected_small = log1p(z_small)
             @test result_small ≈ expected_small rtol=1e-14
         end
 
         for zb in BigFloat.(sample_real_points((-0.7, -0.2, 0.05, 0.3, 0.9); seed=162, lo=-0.85, hi=0.95))
             result_big = meijerg((BigFloat(1), BigFloat(1)), (BigFloat(1), BigFloat(0)), 1, 2, zb)
-            expected_big = log1p(zb) / zb
+            expected_big = log1p(zb)
             @test result_big isa BigFloat
             @test result_big ≈ expected_big atol=big"1e-30" rtol=big"1e-30"
         end
@@ -333,7 +443,7 @@ include("test_utilities.jl")
                                         imag_lo=-0.4,
                                         imag_hi=0.4)
             result_complex = meijerg((1.0, 1.0), (1.0, 0.0), 1, 2, zc)
-            expected_complex = log1p(zc) / zc
+            expected_complex = log1p(zc)
             @test result_complex ≈ expected_complex atol=1e-12 rtol=1e-12
         end
     end

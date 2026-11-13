@@ -1,8 +1,7 @@
-# Ignore any directory named `output`, `rational_spiral_animation` or 'coverage' anywhere in the tree
+# ouput and coverage directories
 **/output/
 **/coverage/
 **/rational_spiral_animation
-
 
 # macOS
 .DS_Store
@@ -43,3 +42,12 @@ desktop.ini
 # Ignore build folder in docs
 docs/build/
 demos/rationalspiral_animation.jl
+
+# Papers and local scratch material
+paperdraft/
+paperplots/
+joss/
+
+# Ignore local agent files
+agents/
+.claude/
