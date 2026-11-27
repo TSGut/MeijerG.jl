@@ -120,12 +120,13 @@ function _meijerg(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     end
 
     # Try contour methods in geometry-aware order:
-    # - if a vertical strip exists: Case i first, then loop case
-    # - otherwise: loop case first, then Case i
+    # - in the convergent regime of the branch, or without a vertical strip: loop case
+    #   first, then Case i
+    # - otherwise: Case i first, then loop case
     has_strip = _has_vertical_strip(a_promoted, b_promoted, m, n)
     loop_case = mode === :lower ? :ii : :iii
 
-    if has_strip
+    if has_strip && !_contour_loop_in_regime(mode, z_promoted)
         try
             return meijerg_contour(a_promoted, b_promoted, m, n, z_promoted; contour_case=:i)
         catch e

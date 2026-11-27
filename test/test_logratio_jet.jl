@@ -62,6 +62,26 @@ end
         @test r.reason === :epsilon_too_large
         @test !r.selected
 
+        # A nonactive parameter 5e-3 from the pair up to an integer bounds the admissible
+        # radius: a zero of 1/Γ(1 + s - b_j) next to the lower pair, a zero of
+        # 1/Γ(a_j - s) next to the upper pair.  Epsilon must stay well inside that radius,
+        # otherwise the jet declines to the separated expansion.
+        lower_near(epsilon) = (c = lower_case(epsilon=epsilon);
+                               (c..., b=(c.b[1], c.b[2], c.b[1] + 2 - 5e-3, c.b[4])))
+        upper_near(epsilon) = (c = upper_case(epsilon=epsilon);
+                               (c..., a=(c.a[1], c.a[2], c.a[1] - 2 - 5e-3, c.a[4])))
+        c = lower_near(1e-3)
+        @test MeijerG._logratio_admissible_radius(c.a, c.b, c.m, c.n, 1, :lower) ≈ 5e-3 rtol=1e-12
+        c = upper_near(1e-3)
+        @test MeijerG._logratio_admissible_radius(c.a, c.b, c.m, c.n, 1, :upper) ≈ 5e-3 rtol=1e-12
+        for near in (lower_near, upper_near), (epsilon, selected) in ((1e-3, false), (1e-4, true))
+            c = near(epsilon)
+            r = MeijerG._try_meijerg_slater_logratio_jet_near(c.a, c.b, c.m, c.n, c.z)
+            @test r.selected == selected
+            selected || @test r.reason === :outside_admissible_radius
+            @test meijerg(c.a, c.b, c.m, c.n, c.z) ≈ meijerg_slater(c.a, c.b, c.m, c.n, c.z) rtol=1e-9
+        end
+
         c = lower_case(L=4)
         r = MeijerG._try_meijerg_slater_logratio_jet_near(c.a, c.b, c.m, c.n, c.z)
         @test r.status === :ok

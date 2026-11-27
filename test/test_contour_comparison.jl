@@ -180,6 +180,28 @@ using MeijerG
         end
     end
 
+    @testset "Trapezoidal loops in the convergent regime" begin
+        # In the convergent regime of the branch `:auto` takes the loop contour, which
+        # reaches full accuracy. Off it, a convergent vertical integral keeps Case (i).
+        a = (0.46 + 0.16im, 0.76 + 0.16im, 1.18 - 0.22im, -0.35 + 0.31im, 1.73 + 0.18im)
+        b = (0.26 - 0.19im, 0.91 + 0.24im, 1.42 - 0.17im)
+        z = 35.0 * cis(-0.075)
+        @test MeijerG._has_vertical_strip(a, b, 2, 3)
+        @test MeijerG._resolve_contour_case(:auto, a, b, 2, 3, z) === :iii
+        @test MeijerG._resolve_contour_case(:auto, a, b, 2, 3, 0.5) === :i
+        @test relerr(meijerg_contour(a, b, 2, 3, z), meijerg_slater(a, b, 2, 3, z)) < 1e-13
+
+        a = (0.20 + 0.25im, 0.78 - 0.15im, 1.31 + 0.19im)
+        b1 = 0.52 + 0.14im
+        z = 2.5e-5 * cis(-0.09)
+        for delta in (0.0, 1e-12)
+            b = (b1, b1 + 0.3, -0.47 + 0.28im, b1 + 5 + delta, 1.67 + 0.16im)
+            @test MeijerG._contour_minimum_levels(a, b, 3, 2, :lower) == 6
+            @test relerr(meijerg_contour(a, b, 3, 2, z; contour_case=:ii),
+                         meijerg_slater(a, b, 3, 2, z)) < 1e-13
+        end
+    end
+
     @testset "Vertical contour only where its integral converges" begin
         # (m, n, p, q) = (4, 2, 5, 8): a separating strip exists, but 2(m + n) < p + q, so the
         # vertical integrand grows along the line. Case (i) is not selected and the loop contour

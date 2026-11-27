@@ -16,8 +16,11 @@ contour families (DLMF 16.17):
 - Case (ii): loop contour around lower poles of `Γ(b_j - s)` (DLMF Case ii)
 - Case (iii): loop contour around upper poles of `Γ(1 - a_j + s)` (DLMF Case iii)
 
-By default (`contour_case = :auto`), case selection follows pole geometry:
-- If a separating vertical strip exists and the vertical integral converges,
+By default (`contour_case = :auto`), case selection follows the branch and pole geometry:
+- In the convergent regime of the branch (`|z| <= 1` lower, `|z| >= 1` upper): Case (ii)
+  for lower mode or Case (iii) for upper mode, falling back to Case (i) if the loop fails
+  and the vertical integral converges
+- Otherwise, if a separating vertical strip exists and the vertical integral converges,
   `|arg z| < (m + n - (p + q)/2) π` (DLMF 16.17(i)): Case (i), falling back to the
   loop contour of the branch if the quadrature fails
 - Otherwise: Case (ii) for lower mode or Case (iii) for upper mode
@@ -28,14 +31,17 @@ By default (`contour_case = :auto`), case selection follows pole geometry:
 - `contour_case`: one of `:auto`, `:i`, `:ii`, `:iii`
 - `sigma`: real part of the Barnes contour. If omitted, a default value inside the admissible strip is chosen
 - `initial_halfwidth`: initial truncation half-width in the `t` variable
-- `max_truncation_steps`: maximum number of half-width doublings used to resolve the infinite tails
+- `max_truncation_steps`: maximum number of half-width doublings used to resolve the infinite tails.
+  For the loop cases it sets the pole budget `max(8, initial_halfwidth) * 2^(max_truncation_steps - 1)`
+  levels per family.
 
 # Notes
 - Real negative `z` must be passed explicitly as complex (`z + 0im`) to select the desired branch.
-- Loop contours group nearby poles when the surrounding gap permits. Acceptance
-  checks tail stabilization, accumulated quadrature estimates, and agreement at
-  two radii enclosing the same poles. These are numerical checks, not rigorous
-  error bounds. The loop checks use the truncation scale `max(abs(value), 1)`.
+- Loop contours group nearby poles when the surrounding gap permits. Each circle is integrated
+  with the trapezoidal rule, which converges geometrically for the periodic integrand, and pole
+  levels are added until the sum is stable to a few ulps. Acceptance compares the accumulated
+  circle error estimates, including the rounding scale of each circle, with
+  `max(atol, rtol * max(abs(value), 1))`. These are numerical checks, not rigorous error bounds.
 """
 function meijerg_contour(a::ParameterInput, b::ParameterInput, m::Integer, n::Integer, z; kwargs...)
     meijerg_contour(Tuple(a), Tuple(b), m, n, z; kwargs...)
@@ -81,16 +87,27 @@ function meijerg_contour(a::Tuple, b::Tuple, m::Integer, n::Integer, z;
         _contour_loop_lower(a_promoted, b_promoted, m, n, z_promoted; rtol=contour_rtol, atol=contour_atol, halfwidth=halfwidth, max_truncation_steps=max_truncation_steps) :
         _contour_loop_upper(a_promoted, b_promoted, m, n, z_promoted; rtol=contour_rtol, atol=contour_atol, halfwidth=halfwidth, max_truncation_steps=max_truncation_steps)
 
+    vertical() = _contour_case_i(a_promoted, b_promoted, m, n, z_promoted, contour_sigma, contour_rtol, contour_atol, halfwidth, max_truncation_steps)
+
     value = if selected_case === :i && contour_case === :auto
         # The loop contour of the branch is the fallback when the vertical quadrature fails.
         try
-            _contour_case_i(a_promoted, b_promoted, m, n, z_promoted, contour_sigma, contour_rtol, contour_atol, halfwidth, max_truncation_steps)
+            vertical()
         catch err
             err isa Union{DomainError,ErrorException} || rethrow()
             loop(_expansion_mode(p, q, z_promoted) === :lower ? :ii : :iii)
         end
+    elseif contour_case === :auto && _has_vertical_strip(a_promoted, b_promoted, m, n) &&
+           _vertical_contour_converges(a_promoted, b_promoted, m, n, z_promoted)
+        # A loop preferred in the convergent regime falls back to the vertical quadrature.
+        try
+            loop(selected_case)
+        catch err
+            err isa Union{DomainError,ErrorException} || rethrow()
+            vertical()
+        end
     elseif selected_case === :i
-        _contour_case_i(a_promoted, b_promoted, m, n, z_promoted, contour_sigma, contour_rtol, contour_atol, halfwidth, max_truncation_steps)
+        vertical()
     else
         loop(selected_case)
     end
@@ -102,23 +119,32 @@ end
 
 Resolve contour-case selection to one of `:i`, `:ii`, or `:iii`.
 
-- `:auto`: chooses `:i` when a vertical strip exists, otherwise chooses loop case
-  by expansion mode (`:ii` for lower, `:iii` for upper).
+- `:auto`: chooses the loop case of the expansion mode (`:ii` for lower, `:iii` for
+  upper) when `z` is in the convergent regime of that branch
+  (`_contour_loop_in_regime`). Otherwise it chooses `:i` when a vertical strip exists
+  and the vertical integral converges, and the loop case of the mode if not.
 - `:i`, `:ii`, `:iii`: explicit case selection.
 """
 function _resolve_contour_case(contour_case::Symbol, a::Tuple, b::Tuple, m::Integer, n::Integer, z)
     contour_case in (:auto, :i, :ii, :iii) || throw(ArgumentError("contour_case must be one of :auto, :i, :ii, :iii"))
 
     if contour_case === :auto
+        mode = _expansion_mode(length(a), length(b), z)
+        loop_case = mode === :lower ? :ii : :iii
+        _contour_loop_in_regime(mode, z) && return loop_case
         if _has_vertical_strip(a, b, m, n) && _vertical_contour_converges(a, b, m, n, z)
             return :i
         end
-        mode = _expansion_mode(length(a), length(b), z)
-        return mode === :lower ? :ii : :iii
+        return loop_case
     end
 
     return contour_case
 end
+
+# Convergent regime of a branch (lower small |z|, upper large |z|). There the residue sum of the
+# loop contour barely cancels, and the trapezoidal loops reach full accuracy at about the cost of
+# the vertical quadrature at its default tolerance.
+_contour_loop_in_regime(mode::Symbol, z) = mode === :lower ? abs(z) <= 1 : abs(z) >= 1
 
 """
     _contour_case_i(a::Tuple, b::Tuple, m::Integer, n::Integer, z,
@@ -236,65 +262,115 @@ function _contour_loop_upper(a::Tuple, b::Tuple, m::Integer, n::Integer, z; rtol
                                      max_truncation_steps=max_truncation_steps)
 end
 
+"""
+    _contour_pole_cluster_sum(a, b, m, n, z, family; rtol, atol, halfwidth, max_truncation_steps)
+
+Sum the loop integrals around the active pole clusters of `family` (`:lower` or
+`:upper`), adding one pole level at a time.  Circles already integrated are
+reused, so each circle is evaluated once.  The sum is truncated after two
+successive levels change it by at most a few ulps, counted only from
+`_contour_minimum_levels` on, and is accepted when the accumulated circle error
+estimates, the rounding scale of each circle included, are within
+`max(atol, rtol * max(abs(value), 1))`.  The pole budget is that of the former
+doubling schedule, `max(8, halfwidth) * 2^(max_truncation_steps - 1)` levels.
+"""
 function _contour_pole_cluster_sum(a::Tuple, b::Tuple, m::Integer, n::Integer, z, family::Symbol;
                                    rtol, atol, halfwidth, max_truncation_steps::Integer)
-    initial_terms = max(8, ceil(Int, Float64(halfwidth)))
-    previous_value = nothing
-    terms = initial_terms
-
-    for _ in 1:max_truncation_steps
-        value, quadrature_error = _contour_pole_cluster_sum_fixed(
-            a, b, m, n, z, family, terms; rtol=rtol, atol=atol, return_error=true)
-        if previous_value !== nothing
-            scale = max(abs(value), abs(previous_value), one(abs(value)))
-            if abs(value - previous_value) <= max(atol, rtol * scale) &&
-               isfinite(quadrature_error) && quadrature_error <= max(atol, rtol * scale)
-                return value
+    logz = log(z)
+    total = zero(complex(_contour_accumulator_seed(a, b, z)))
+    R = typeof(real(total))
+    max_level = max(8, ceil(Int, Float64(halfwidth))) << (max_truncation_steps - 1)
+    first_level = min(_contour_minimum_levels(a, b, m, n, family), max_level)
+    C = typeof(first(family === :lower ? b : a) + 0)
+    circles = Dict{Tuple{C, R}, Tuple{typeof(total), R}}()
+    previous = total
+    settled = 0
+    for maxell in first_level:max_level
+        total = zero(total)
+        error_sum = zero(R)
+        for cluster in _contour_active_pole_clusters(a, b, m, n, family, maxell)
+            radius = convert(R, _contour_cluster_radius(cluster.center, cluster.members,
+                                                        a, b, m, n, maxell))
+            value, error = get!(circles, (cluster.center, radius)) do
+                _contour_circle_trapezoid(cluster.center, radius, a, b, m, n, logz)
+            end
+            total += value
+            error_sum += error
+        end
+        if maxell > first_level
+            step = abs(total - previous)
+            settled = step <= max(atol, 4 * eps(R) * abs(total)) ? settled + 1 : 0
+            if settled >= 2
+                value = family === :lower ? -total : total
+                target = max(atol, rtol * max(abs(value), one(R)))
+                isfinite(error_sum) && error_sum + step <= target && return value
+                throw(ErrorException("Loop contour quadrature or rounding check failed."))
             end
         end
-        previous_value = value
-        terms *= 2
+        previous = total
     end
 
     throw(ErrorException("Loop contour truncation or quadrature checks did not converge within the configured refinement budget."))
 end
 
-function _contour_pole_cluster_sum_fixed(a::Tuple, b::Tuple, m::Integer, n::Integer,
-                                        z, family::Symbol, maxell::Integer;
-                                        rtol, atol, return_error::Bool=false,
-                                        quadrature_rtol=rtol / 8, refinement::Integer=0)
-    logz = log(z)
-    clusters = _contour_active_pole_clusters(a, b, m, n, family, maxell)
-    total = zero(_contour_accumulator_seed(a, b, z))
-    error_sum = zero(real(total))
-    for cluster in clusters
-        radius = _contour_cluster_radius(cluster.center, cluster.members, a, b, m, n, maxell)
-        reach, _ = _contour_cluster_bounds(cluster.center, cluster.members, a, b, m, n)
-        inner_radius = (radius + reach) / 2
-        local_atol = atol / (8 * length(clusters))
-        value, error = _contour_small_circle_estimate(
-            cluster.center, radius, a, b, m, n, logz; rtol=quadrature_rtol, atol=local_atol)
-        inner_value, inner_error = _contour_small_circle_estimate(
-            cluster.center, inner_radius, a, b, m, n, logz; rtol=quadrature_rtol, atol=local_atol)
-        total += value
-        error_sum += max(error, inner_error, abs(value - inner_value))
-    end
-    value = family === :lower ? -total : total
-    target = max(atol, rtol * max(abs(value), one(abs(value))))
-    if isfinite(error_sum) && error_sum > target && refinement < 3
-        # Cancellation between circles requires tighter quadrature than the
-        # tolerance on any individual circle. Retain the requested final tolerance.
-        tighter = max(eps(typeof(real(total))), quadrature_rtol * min(0.1, target / (4 * error_sum)))
-        if tighter < quadrature_rtol
-            return _contour_pole_cluster_sum_fixed(a, b, m, n, z, family, maxell;
-                rtol=rtol, atol=atol, return_error=return_error,
-                quadrature_rtol=tighter, refinement=refinement + 1)
+# Residues of an active family can be suppressed, exactly or nearly, on its leading levels by the
+# zeros of a passive reciprocal gamma factor on the same side: 1/Γ(1 - b_k + s) for the lower
+# poles b_j + ℓ up to ℓ = Re(b_k - b_j) - 1, and 1/Γ(a_k - s) for the upper poles a_j - 1 - ℓ up
+# to ℓ = Re(a_j - a_k) - 1.  The truncation test starts after these levels, so that small leading
+# increments cannot end the sum.
+function _contour_minimum_levels(a::Tuple, b::Tuple, m::Integer, n::Integer, family::Symbol)
+    first_level = 2
+    if family === :lower
+        for j in 1:m, k in (m + 1):length(b)
+            first_level = max(first_level, floor(Int, real(b[k] - b[j])) + 1)
+        end
+    else
+        for j in 1:n, k in (n + 1):length(a)
+            first_level = max(first_level, floor(Int, real(a[j] - a[k])) + 1)
         end
     end
-    return_error && return (value, error_sum)
-    isfinite(error_sum) && error_sum <= target ||
-        throw(ErrorException("Loop contour quadrature or radius consistency check failed."))
-    return value
+    return first_level
+end
+
+"""
+    _contour_circle_trapezoid(center, radius, a, b, m, n, logz)
+
+Return `(value, error)` for `(1/2πi)∮ K(s) ds` over `|s - center| = radius` by the
+trapezoidal rule.  The integrand is periodic and analytic in an annulus around the
+circle, so the rule converges geometrically, with ratio
+`max(reach / radius, radius / nearest)` for the cluster bounds of
+`_contour_cluster_radius`, at most 1/2.  The number of points is doubled, reusing
+the previous points, until two estimates agree to a few ulps of the largest
+sample. `error` is that difference plus one ulp of the largest sample.
+"""
+function _contour_circle_trapezoid(center, radius, a::Tuple, b::Tuple, m::Integer, n::Integer, logz)
+    R = typeof(radius)
+    sample(k, points) = (phase = cispi(convert(R, 2k) / points);
+        _contour_kernel(center + radius * phase, a, b, m, n, logz) * (radius * phase))
+    points = 8
+    max_points = 16 * nextpow(2, precision(R))
+    total = sample(0, points)
+    scale = abs(total)
+    for k in 1:(points - 1)
+        v = sample(k, points)
+        total += v
+        scale = max(scale, abs(v))
+    end
+    estimate = total / points
+    while points < max_points
+        for k in 1:2:(2points - 1)
+            v = sample(k, 2points)
+            total += v
+            scale = max(scale, abs(v))
+        end
+        points *= 2
+        refined = total / points
+        difference = abs(refined - estimate)
+        isfinite(difference) || break
+        difference <= 16 * eps(R) * scale && return refined, difference + eps(R) * scale
+        estimate = refined
+    end
+    return estimate, R(Inf)
 end
 
 function _contour_accumulator_seed(a::Tuple, b::Tuple, z)
@@ -409,23 +485,6 @@ function _contour_cluster_radius(center, members::Vector{_ContourMember}, a::Tup
     radius = max(2 * reach, min(oftype(reach, 0.2), nearest * oftype(reach, 0.35)))
     reach < radius < nearest || throw(ErrorException("Invalid loop pole cluster radius."))
     return radius
-end
-
-function _contour_small_circle_estimate(center, radius, a::Tuple, b::Tuple, m::Integer, n::Integer, logz; rtol, atol)
-    real_type = typeof(real(center))
-    r = convert(real_type, radius)
-    # Narrow gaps to excluded poles can still force small circles. Tighten
-    # their quadrature; the summed error and radius checks decide acceptance.
-    small_radius = eps(real_type)^(one(real_type) / 4)
-    tight_rtol = eps(real_type)^(3 * one(real_type) / 4)
-    local_rtol = r < small_radius ? min(rtol, tight_rtol) : rtol
-    integrand = θ -> begin
-        phase = cis(θ)
-        s = center + r * phase
-        ds_dθ = im * r * phase
-        _contour_kernel(s, a, b, m, n, logz) * ds_dθ / (2 * convert(real_type, pi) * im)
-    end
-    return quadgk(integrand, zero(real_type), 2 * convert(real_type, pi); rtol=local_rtol, atol=atol, maxevals=10000)
 end
 
 """

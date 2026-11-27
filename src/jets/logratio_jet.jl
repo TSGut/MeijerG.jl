@@ -3,6 +3,8 @@
 
 const _LOGRATIO_JET_MAX_ABS_EPSILON = 1.1e-3
 const _LOGRATIO_JET_MAX_ABS_EPSILON_LOGZ = 2e-1
+# Largest |epsilon| relative to the admissible radius of the pair (`_logratio_admissible_radius`).
+const _LOGRATIO_JET_MAX_EPSILON_RADIUS_RATIO = 0.05
 const _LOGRATIO_JET_MIN_LOWER_RAW_CANCELLATION = 10.0
 const _LOGRATIO_JET_MAX_GROUPED_TERMS = 50
 const _LOGRATIO_JET_PAIR_ATOL = 1.1e-2
@@ -1173,12 +1175,66 @@ function _upper_logratio_jet_series(a::Tuple, b::Tuple, m::Integer, nactive::Int
             primitive_status=:ok)
 end
 
+# Distance from `x` to the nearest pole of Γ, a nonpositive integer.
+_logratio_gamma_pole_distance(x) = abs(x + max(zero(real(x)), round(-real(x))))
+
+# Distance from `x` to the nearest integer.
+_logratio_integer_distance(x) = abs(x - round(real(x)))
+
+"""
+    _logratio_admissible_radius(a, b, m, nactive, L, branch)
+
+Distance from a canonical near pair to the nearest pole or reciprocal-gamma zero
+of the remaining gamma factors, over all residue indices `K >= L` (lower pole
+`s = b[1] + K`, upper pole `s = a[1] - 1 - K`).  The log-gamma divided
+differences of `_logratio_lower_D`/`_logratio_upper_D` are Taylor series in
+`epsilon` whose radius is at least this distance.  A gamma argument that
+decreases with `K` meets every integer translate, so it contributes its distance
+to the nearest integer.  One that increases with `K` is nearest to a pole at
+`K = L`.
+"""
+function _logratio_admissible_radius(a::Tuple, b::Tuple, m::Integer, nactive::Integer,
+                                     L::Integer, branch::Symbol)
+    radius = Inf
+    if branch === :lower
+        s = b[1] + L
+        for j in 3:m                       # Γ(b_j - s)
+            radius = min(radius, _logratio_integer_distance(b[j] - b[1]))
+        end
+        for j in 1:nactive                 # Γ(1 - a_j + s)
+            radius = min(radius, _logratio_gamma_pole_distance(1 - a[j] + s))
+        end
+        for j in (m + 1):length(b)         # 1 / Γ(1 + s - b_j)
+            radius = min(radius, _logratio_gamma_pole_distance(1 + s - b[j]))
+        end
+        for j in (nactive + 1):length(a)   # 1 / Γ(a_j - s)
+            radius = min(radius, _logratio_integer_distance(a[j] - b[1]))
+        end
+    else
+        s = a[1] - 1 - L
+        for j in 1:m                       # Γ(b_j - s)
+            radius = min(radius, _logratio_gamma_pole_distance(b[j] - s))
+        end
+        for j in 3:nactive                 # Γ(1 - a_j + s)
+            radius = min(radius, _logratio_integer_distance(a[1] - a[j]))
+        end
+        for j in (m + 1):length(b)         # 1 / Γ(1 - b_j + s)
+            radius = min(radius, _logratio_integer_distance(a[1] - b[j]))
+        end
+        for j in (nactive + 1):length(a)   # 1 / Γ(a_j - s)
+            radius = min(radius, _logratio_gamma_pole_distance(a[j] - s))
+        end
+    end
+    return radius
+end
+
 """
     _logratio_jet_policy(a, b, m, n, z, branch, pair)
 
 Apply the conservative first-inclusion policy for the private near-confluent
 candidate.  The policy accepts only lower/upper, finite non-balanced,
 canonical active pairs with small `epsilon`, controlled `epsilon*log(z)`,
+`epsilon` well inside the admissible radius (`_logratio_admissible_radius`),
 validated `z`, and branch-specific safety gates.
 """
 function _logratio_jet_policy(a::Tuple, b::Tuple, m::Integer, n::Integer, z,
@@ -1201,6 +1257,11 @@ function _logratio_jet_policy(a::Tuple, b::Tuple, m::Integer, n::Integer, z,
     abs(epsv * log(z)) <= _LOGRATIO_JET_MAX_ABS_EPSILON_LOGZ ||
         return (selected=false, status=:not_near_confluent, reason=:epsilon_logz_too_large,
                 diagnostics=(pair=pair,))
+    radius = _logratio_admissible_radius(a, b, m, n, pair.L, branch)
+    abs(epsv) <= _LOGRATIO_JET_MAX_EPSILON_RADIUS_RATIO * radius ||
+        return (selected=false, status=:not_near_confluent,
+                reason=:outside_admissible_radius,
+                diagnostics=(pair=pair, admissible_radius=radius))
 
     cancel = branch === :lower ?
         _logratio_lower_raw_cancellation(a, b, m, n, z, pair.L) :

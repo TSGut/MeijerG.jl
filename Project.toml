@@ -1,6 +1,6 @@
 name = "MeijerG"
 uuid = "c1979943-378d-4dac-9c37-200771e290c3"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Timon S. Gutleb"]
 
 [deps]
