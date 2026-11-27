@@ -212,13 +212,25 @@ function _higher_logratio_anchor(num, den, members, z::C, orientation::Integer;
 
     # Λ is accumulated in place (coefficientwise `x + y` / `x + (-y)`, the operations
     # of the jet `+` and `-`), avoiding a temporary jet per factor.
+    # Exact clusters repeat the member gamma argument. Retain only the previous
+    # jet, with no dictionary or extra jet allocation for distinct near poles.
+    # Identity compares all bits (including DD low parts and signed zeros).
+    previous_arg = zero(C)
+    previous_slope = zero(C)
+    previous_gamma = nothing
     for member in members
         f = num[member.factor_index]
         slope = f.slope
         δk = member.position - s0
         u0 = -slope * δk
         _jet_add_const!(Λ, -log(slope))
-        _jet_add!(Λ, _higher_loggamma_jet(1 + u0, slope, N), 1)
+        arg = 1 + u0
+        if previous_gamma === nothing || !(arg === previous_arg && slope === previous_slope)
+            previous_gamma = _higher_loggamma_jet(arg, slope, N)
+            previous_arg = arg
+            previous_slope = slope
+        end
+        _jet_add!(Λ, previous_gamma, 1)
         for i in 1:member.ell
             _jet_add!(Λ, _higher_loglinear_jet(u0 - i, slope, N), -1)
         end

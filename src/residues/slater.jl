@@ -283,9 +283,14 @@ residue terms (families times their hypergeometric majorants), from which
 `meijerg` forms the summation conditioning `κ_sum = Σ|T| / |Σ T|`.
 """
 _lower_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z) =
-    _lower_expansion_certified(a, b, m, n, z).value
+    _lower_expansion(a, b, m, n, z, Val(false)).value
 
-function _lower_expansion_certified(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
+_lower_expansion_certified(a::Tuple, b::Tuple, m::Integer, n::Integer, z) =
+    _lower_expansion(a, b, m, n, z, Val(true))
+
+# Share value arithmetic; only callers that use the certificate pay for its majorant.
+function _lower_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z,
+                          ::Val{certify}) where {certify}
     m == 0 && return (value=zero(z), absolute_sum=zero(abs(z)))
     a_promoted, b_promoted, z_promoted = _promote_inputs(a, b, z)
     T = eltype(b_promoted)
@@ -324,10 +329,12 @@ function _lower_expansion_certified(a::Tuple, b::Tuple, m::Integer, n::Integer, 
             hypergeom = has_regularized ?
                 _regularized_pFq_at_poles(α, β, argument, regularized) :
                 pFq(α, β, argument)
-            scale = abs(term * powv)
+            scale = certify ? abs(term * powv) : zero(abs(total))
             term *= powv * hypergeom
             total += term
-            absum += has_regularized ? abs(term) : scale * _pfq_absolute_sum(α, β, argument)
+            if certify
+                absum += has_regularized ? abs(term) : scale * _pfq_absolute_sum(α, β, argument)
+            end
         end
     end
     return (value=total, absolute_sum=absum)
@@ -344,9 +351,14 @@ at `±1/z`. Used when `p > q`, or when `p == q` and `|z| > 1`.
 expansion.
 """
 _upper_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z) =
-    _upper_expansion_certified(a, b, m, n, z).value
+    _upper_expansion(a, b, m, n, z, Val(false)).value
 
-function _upper_expansion_certified(a::Tuple, b::Tuple, m::Integer, n::Integer, z)
+_upper_expansion_certified(a::Tuple, b::Tuple, m::Integer, n::Integer, z) =
+    _upper_expansion(a, b, m, n, z, Val(true))
+
+# Share value arithmetic; only callers that use the certificate pay for its majorant.
+function _upper_expansion(a::Tuple, b::Tuple, m::Integer, n::Integer, z,
+                          ::Val{certify}) where {certify}
     n == 0 && return (value=zero(z), absolute_sum=zero(abs(z)))
     a_promoted, b_promoted, z_promoted = _promote_inputs(a, b, z)
     T = eltype(a_promoted)
@@ -385,10 +397,12 @@ function _upper_expansion_certified(a::Tuple, b::Tuple, m::Integer, n::Integer, 
             hypergeom = has_regularized ?
                 _regularized_pFq_at_poles(α, β, argument, regularized) :
                 pFq(α, β, argument)
-            scale = abs(term * powv)
+            scale = certify ? abs(term * powv) : zero(abs(total))
             term *= powv * hypergeom
             total += term
-            absum += has_regularized ? abs(term) : scale * _pfq_absolute_sum(α, β, argument)
+            if certify
+                absum += has_regularized ? abs(term) : scale * _pfq_absolute_sum(α, β, argument)
+            end
         end
     end
     return (value=total, absolute_sum=absum)

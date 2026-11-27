@@ -302,6 +302,23 @@ m = 1, n = 1
 ```
 """
 function _reduce_orders(a::Tuple, b::Tuple, m::Integer, n::Integer)
+    # Most calls have no cancellation. Avoid constructing and concatenating four
+    # vectors in that case. Keep collection promotion and nonfinite behavior on
+    # the original path for heterogeneous or nonfinite parameters.
+    homogeneous(t) = isempty(t) || all(x -> typeof(x) === typeof(first(t)), t)
+    if !homogeneous(a) || !homogeneous(b) || !all(isfinite, a) || !all(isfinite, b)
+        return _reduce_orders_collect(a, b, m, n)
+    end
+    for i in 1:n, j in (m + 1):length(b)
+        isequal(a[i], b[j]) && return _reduce_orders_collect(a, b, m, n)
+    end
+    for i in (n + 1):length(a), j in 1:m
+        isequal(a[i], b[j]) && return _reduce_orders_collect(a, b, m, n)
+    end
+    return nothing
+end
+
+function _reduce_orders_collect(a::Tuple, b::Tuple, m::Integer, n::Integer)
     a_left = collect(a[1:n])
     a_right = collect(a[n+1:end])
     b_left = collect(b[1:m])

@@ -1,6 +1,30 @@
 using HypergeometricFunctions: pFq
 
 @testset "Slater evaluator" begin
+    @testset "Value-only and certified expansion agreement" begin
+        cases = (
+            ((0.45, 1.35), (0.12, 0.82, 1.74), 2, 1, 0.4),
+            ((0.3, 0.95, 1.75), (0.2, 1.1), 1, 2, 2.4),
+            ((0.4, 1.2), (0.15, 0.85, 1.75), 1, 1, 0.7 + 0.4im),
+            ((0.2, 1.1, -0.8), (0.0, 0.2, 0.5), 2, 1, 1.43^2),
+            ((1.0, 0.8, 0.5), (0.8, -0.1, 1.8), 1, 2, inv(1.43^2)),
+        )
+        for (a, b, m, n, z) in cases, high_precision in (false, true)
+            aa, bb, zz = high_precision ? (map(big, a), map(big, b), big(z)) : (a, b, z)
+            lower = MeijerG._expansion_mode(length(a), length(b), z) === :lower
+            certified = lower ? MeijerG._lower_expansion_certified(aa, bb, m, n, zz) :
+                                MeijerG._upper_expansion_certified(aa, bb, m, n, zz)
+            value = lower ? MeijerG._lower_expansion(aa, bb, m, n, zz) :
+                            MeijerG._upper_expansion(aa, bb, m, n, zz)
+            @test isequal(value, certified.value)
+            @test isfinite(certified.absolute_sum)
+            @test certified.absolute_sum > 0
+        end
+        r = MeijerG._lower_expansion_certified((), (0.0,), 1, 0, 2.0)
+        @test r.value ≈ exp(-2.0)
+        @test r.absolute_sum ≈ exp(2.0)
+    end
+
     @testset "Fallback behavior" begin
         a = (0.3, 0.8)
         b = (0.2, 1.1)

@@ -2,6 +2,14 @@ using Test
 using MeijerG
 
 @testset "Private active confluence cluster detection" begin
+    @testset "Sorted complex window preserves seed grouping" begin
+        # The distant imaginary coordinate must not terminate the real-coordinate scan.
+        # The endpoint belongs to the first seed, but its neighbor is not chained in.
+        positions = ComplexF64[0, 0.125 + 2im, 0.25, nextfloat(0.25), 2]
+        candidates = [(family=i, ell=0, position=z) for (i, z) in enumerate(positions)]
+        @test MeijerG._cluster_groups(candidates, 0.25) == [[1, 3], [2], [4], [5]]
+    end
+
     @testset "lower exact and near shifted family clusters" begin
         b0 = -0.31 + 0.11im
         a = (0.42 + 0.23im, 1.16 - 0.18im, 1.77 + 0.19im)

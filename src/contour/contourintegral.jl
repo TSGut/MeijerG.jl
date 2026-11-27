@@ -32,6 +32,10 @@ By default (`contour_case = :auto`), case selection follows pole geometry:
 
 # Notes
 - Real negative `z` must be passed explicitly as complex (`z + 0im`) to select the desired branch.
+- Loop contours group nearby poles when the surrounding gap permits. Acceptance
+  checks tail stabilization, accumulated quadrature estimates, and agreement at
+  two radii enclosing the same poles. These are numerical checks, not rigorous
+  error bounds. The loop checks use the truncation scale `max(abs(value), 1)`.
 """
 function meijerg_contour(a::ParameterInput, b::ParameterInput, m::Integer, n::Integer, z; kwargs...)
     meijerg_contour(Tuple(a), Tuple(b), m, n, z; kwargs...)
@@ -239,10 +243,12 @@ function _contour_pole_cluster_sum(a::Tuple, b::Tuple, m::Integer, n::Integer, z
     terms = initial_terms
 
     for _ in 1:max_truncation_steps
-        value = _contour_pole_cluster_sum_fixed(a, b, m, n, z, family, terms; rtol=rtol, atol=atol)
+        value, quadrature_error = _contour_pole_cluster_sum_fixed(
+            a, b, m, n, z, family, terms; rtol=rtol, atol=atol, return_error=true)
         if previous_value !== nothing
             scale = max(abs(value), abs(previous_value), one(abs(value)))
-            if abs(value - previous_value) <= max(atol, rtol * scale)
+            if abs(value - previous_value) <= max(atol, rtol * scale) &&
+               isfinite(quadrature_error) && quadrature_error <= max(atol, rtol * scale)
                 return value
             end
         end
@@ -250,18 +256,45 @@ function _contour_pole_cluster_sum(a::Tuple, b::Tuple, m::Integer, n::Integer, z
         terms *= 2
     end
 
-    throw(ErrorException("Loop contour pole-cluster truncation did not converge within the configured refinement budget."))
+    throw(ErrorException("Loop contour truncation or quadrature checks did not converge within the configured refinement budget."))
 end
 
-function _contour_pole_cluster_sum_fixed(a::Tuple, b::Tuple, m::Integer, n::Integer, z, family::Symbol, maxell::Integer; rtol, atol)
+function _contour_pole_cluster_sum_fixed(a::Tuple, b::Tuple, m::Integer, n::Integer,
+                                        z, family::Symbol, maxell::Integer;
+                                        rtol, atol, return_error::Bool=false,
+                                        quadrature_rtol=rtol / 8, refinement::Integer=0)
     logz = log(z)
     clusters = _contour_active_pole_clusters(a, b, m, n, family, maxell)
     total = zero(_contour_accumulator_seed(a, b, z))
+    error_sum = zero(real(total))
     for cluster in clusters
         radius = _contour_cluster_radius(cluster.center, cluster.members, a, b, m, n, maxell)
-        total += _contour_small_circle_integral(cluster.center, radius, a, b, m, n, logz; rtol=rtol, atol=atol)
+        reach, _ = _contour_cluster_bounds(cluster.center, cluster.members, a, b, m, n)
+        inner_radius = (radius + reach) / 2
+        local_atol = atol / (8 * length(clusters))
+        value, error = _contour_small_circle_estimate(
+            cluster.center, radius, a, b, m, n, logz; rtol=quadrature_rtol, atol=local_atol)
+        inner_value, inner_error = _contour_small_circle_estimate(
+            cluster.center, inner_radius, a, b, m, n, logz; rtol=quadrature_rtol, atol=local_atol)
+        total += value
+        error_sum += max(error, inner_error, abs(value - inner_value))
     end
-    return family === :lower ? -total : total
+    value = family === :lower ? -total : total
+    target = max(atol, rtol * max(abs(value), one(abs(value))))
+    if isfinite(error_sum) && error_sum > target && refinement < 3
+        # Cancellation between circles requires tighter quadrature than the
+        # tolerance on any individual circle. Retain the requested final tolerance.
+        tighter = max(eps(typeof(real(total))), quadrature_rtol * min(0.1, target / (4 * error_sum)))
+        if tighter < quadrature_rtol
+            return _contour_pole_cluster_sum_fixed(a, b, m, n, z, family, maxell;
+                rtol=rtol, atol=atol, return_error=return_error,
+                quadrature_rtol=tighter, refinement=refinement + 1)
+        end
+    end
+    return_error && return (value, error_sum)
+    isfinite(error_sum) && error_sum <= target ||
+        throw(ErrorException("Loop contour quadrature or radius consistency check failed."))
+    return value
 end
 
 function _contour_accumulator_seed(a::Tuple, b::Tuple, z)
@@ -272,89 +305,117 @@ function _contour_accumulator_seed(a::Tuple, b::Tuple, z)
 end
 
 # Pole-cluster bookkeeping uses concretely-typed centers and member tuples.
-# The greedy clustering pass is quadratic in the candidate count, which grows
-# with truncation doubling, so `Any[]` boxing dominated its cost.
+# Keep centers and member lists concrete as the truncation grows.
 const _ContourMember = Tuple{Symbol, Int, Int}
 
 function _contour_active_pole_clusters(a::Tuple, b::Tuple, m::Integer, n::Integer, family::Symbol, maxell::Integer)
-    if family === :lower
-        count = m * (maxell + 1)
-        C = typeof(@inbounds b[1] + 0)
-        centers = Vector{C}(undef, count)
-        members = Vector{_ContourMember}(undef, count)
-        idx = 0
-        @inbounds for j in 1:m, ell in 0:maxell
-            idx += 1
-            centers[idx] = b[j] + ell
-            members[idx] = (:lower, j, ell)
-        end
-        return _contour_cluster_candidates(centers, members)
-    else
-        count = n * (maxell + 1)
-        C = typeof(@inbounds a[1] + 0)
-        centers = Vector{C}(undef, count)
-        members = Vector{_ContourMember}(undef, count)
-        idx = 0
-        @inbounds for j in 1:n, ell in 0:maxell
-            idx += 1
-            centers[idx] = a[j] - 1 - ell
-            members[idx] = (:upper, j, ell)
-        end
-        return _contour_cluster_candidates(centers, members)
+    parameters, count, direction = family === :lower ? (b, m, 1) : (a, n, -1)
+    C = typeof(first(parameters) + 0)
+    centers = C[]
+    members = _ContourMember[]
+    for j in 1:count, ell in 0:maxell
+        base = family === :lower ? parameters[j] : parameters[j] - 1
+        push!(centers, base + direction * ell)
+        push!(members, (family, j, ell))
     end
+    required_count = length(centers)
+    included = Set(members)
+    # Do not cut a multiple/nearby pole group at the artificial tail boundary.
+    # Add the local halo, but do not start new circles from halo-only poles.
+    for i in 1:required_count, j in 1:count
+        base = family === :lower ? parameters[j] : parameters[j] - 1
+        ell = max(0, round(Int, direction * real(centers[i] - base)))
+        member = (family, j, ell)
+        pole = base + direction * ell
+        if !(member in included) && abs(pole - centers[i]) <= 0.2
+            push!(centers, pole)
+            push!(members, member)
+            push!(included, member)
+        end
+    end
+    return _contour_cluster_candidates(centers, members; required_count=required_count,
+        admissible=(center, group) -> begin
+            reach, nearest = _contour_cluster_bounds(center, group, a, b, m, n)
+            reach < nearest / 4
+        end)
 end
 
-function _contour_cluster_candidates(centers::Vector{C}, members::Vector{_ContourMember}) where {C}
+function _contour_cluster_candidates(centers::Vector{C}, members::Vector{_ContourMember};
+                                     admissible=(center, group) -> true,
+                                     required_count=length(centers)) where {C}
     N = length(centers)
     used = falses(N)
     clusters = Vector{NamedTuple{(:center, :members), Tuple{C, Vector{_ContourMember}}}}()
-    @inbounds for i in 1:N
+    # The pole lattices have unit spacing. Keep groups local, but join a tight
+    # group well before floating-point coincidence if its surrounding gap allows it.
+    @inbounds for i in 1:required_count
         used[i] && continue
         center = centers[i]
-        cluster_members = _ContourMember[members[i]]
-        used[i] = true
-        for j in (i + 1):N
-            used[j] && continue
-            if abs(centers[j] - center) <= _contour_cluster_tol(center, centers[j])
-                push!(cluster_members, members[j])
-                used[j] = true
-            end
+        order = sortperm(abs.(centers .- center))
+        candidates = Int[]
+        for j in order
+            (used[j] || abs(centers[j] - center) > 0.2) && break
+            push!(candidates, j)
         end
-        push!(clusters, (center=center, members=cluster_members))
+        accepted = false
+        for count in length(candidates):-1:1
+            selected = candidates[1:count]
+            reach = maximum(abs(centers[j] - center) for j in selected)
+            nearest = count < N ? abs(centers[order[count + 1]] - center) : Inf
+            reach < nearest / 4 || continue
+            group = members[selected]
+            admissible(center, group) || continue
+            used[selected] .= true
+            push!(clusters, (center=center, members=group))
+            accepted = true
+            break
+        end
+        accepted || throw(ErrorException("Cannot isolate a loop pole cluster with adequate clearance."))
     end
     return clusters
 end
 
-_contour_cluster_tol(x, y) = sqrt(eps(typeof(real(x + y)))) * max(abs(x), abs(y), one(abs(x)))
-
-function _contour_cluster_radius(center, members::Vector{_ContourMember}, a::Tuple, b::Tuple, m::Integer, n::Integer, maxell::Integer)
-    member_set = Set{_ContourMember}(members)
-    nearest = Inf
-    @inbounds for j in 1:m, ell in 0:(maxell + 2)
-        (:lower, j, ell) in member_set && continue
-        nearest = min(nearest, Float64(abs((b[j] + ell) - center)))
+# Distance to every assigned pole and the nearest unassigned pole, including
+# poles beyond the finite truncation. Each family is an infinite unit lattice;
+# search outward from its nearest nonnegative index until a nonmember is found.
+function _contour_cluster_bounds(center, members::Vector{_ContourMember}, a::Tuple, b::Tuple, m::Integer, n::Integer)
+    member_set = Set(members)
+    reach = zero(real(center))
+    for (family, j, ell) in members
+        pole = family === :lower ? b[j] + ell : a[j] - 1 - ell
+        reach = max(reach, abs(pole - center))
     end
-    @inbounds for j in 1:n, ell in 0:(maxell + 2)
-        (:upper, j, ell) in member_set && continue
-        nearest = min(nearest, Float64(abs((a[j] - 1 - ell) - center)))
+    nearest = oftype(reach, Inf)
+    for (family, parameters, count, direction) in ((:lower, b, m, 1), (:upper, a, n, -1))
+        for j in 1:count
+            base = family === :lower ? parameters[j] : parameters[j] - 1
+            k = max(0, round(Int, direction * real(center - base)))
+            for step in (-1, 1)
+                ell = k
+                while ell >= 0 && (family, j, ell) in member_set
+                    ell += step
+                end
+                ell < 0 && continue
+                nearest = min(nearest, abs(base + direction * ell - center))
+            end
+        end
     end
-    real_type = typeof(real(center))
-    coincident_tol = Float64(_contour_cluster_tol(center, center))
-    nearest_for_radius = nearest <= coincident_tol ? Inf : nearest
-    geometric_radius = isfinite(nearest_for_radius) ? min(0.2, 0.35 * nearest_for_radius) : 0.2
-    floor_radius = sqrt(eps(real_type))
-    radius = max(geometric_radius, Float64(floor_radius))
-    isfinite(nearest_for_radius) && (radius = min(radius, 0.35 * nearest_for_radius))
-    return convert(real_type, radius)
+    return reach, nearest
 end
 
-function _contour_small_circle_integral(center, radius, a::Tuple, b::Tuple, m::Integer, n::Integer, logz; rtol, atol)
+function _contour_cluster_radius(center, members::Vector{_ContourMember}, a::Tuple, b::Tuple, m::Integer, n::Integer, maxell::Integer)
+    reach, nearest = _contour_cluster_bounds(center, members, a, b, m, n)
+    reach < nearest / 4 || throw(ErrorException("Loop pole cluster has insufficient clearance."))
+    radius = max(2 * reach, min(oftype(reach, 0.2), nearest * oftype(reach, 0.35)))
+    reach < radius < nearest || throw(ErrorException("Invalid loop pole cluster radius."))
+    return radius
+end
+
+function _contour_small_circle_estimate(center, radius, a::Tuple, b::Tuple, m::Integer, n::Integer, logz; rtol, atol)
     real_type = typeof(real(center))
     r = convert(real_type, radius)
-    # Near-but-not-yet-clustered poles force tiny residue circles.  The kernel
-    # then scales like 1/r, so the default contour tolerance can leave a visible
-    # pre-cluster error spike even though ordinary loop circles are well
-    # resolved.  Tighten only these small-circle quadratures.
+    # Narrow gaps to excluded poles can still force small circles. Tighten
+    # their quadrature; the summed error and radius checks decide acceptance.
     small_radius = eps(real_type)^(one(real_type) / 4)
     tight_rtol = eps(real_type)^(3 * one(real_type) / 4)
     local_rtol = r < small_radius ? min(rtol, tight_rtol) : rtol
@@ -364,8 +425,7 @@ function _contour_small_circle_integral(center, radius, a::Tuple, b::Tuple, m::I
         ds_dθ = im * r * phase
         _contour_kernel(s, a, b, m, n, logz) * ds_dθ / (2 * convert(real_type, pi) * im)
     end
-    value, _ = quadgk(integrand, zero(real_type), 2 * convert(real_type, pi); rtol=local_rtol, atol=atol, maxevals=10000)
-    return value
+    return quadgk(integrand, zero(real_type), 2 * convert(real_type, pi); rtol=local_rtol, atol=atol, maxevals=10000)
 end
 
 """

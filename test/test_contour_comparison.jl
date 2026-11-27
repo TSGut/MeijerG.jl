@@ -206,3 +206,49 @@ using MeijerG
         @test_throws DomainError meijerg_contour(a, b, 4, 2, 200.0; contour_case=:i)
     end
 end
+
+@testset "Geometry-based loop clusters" begin
+    a = (0.18 + 0.24im, 0.83 - 0.16im, 1.24 + 0.21im,
+         -0.33 + 0.28im, 1.71 - 0.18im)
+    beta = 0.42 + 0.13im
+    passive = (-0.52 + 0.31im, 1.09 - 0.23im, 1.87 + 0.19im, 2.41 - 0.14im)
+    for spacing in (0.01, 1e-5, 1e-7, 3e-8, 1e-8, 3e-9, 0.0), L in (0, 3)
+        b = (Tuple(beta + j * (L + spacing) for j in 0:3)..., passive...)
+        clusters = MeijerG._contour_active_pole_clusters(a, b, 4, 2, :lower, 8)
+        assigned = reduce(vcat, (c.members for c in clusters))
+        @test length(assigned) == length(unique(assigned))
+        @test all((:lower, j, ell) in assigned for j in 1:4 for ell in 0:8)
+        valid_geometry = true
+        for c in clusters
+            radius = MeijerG._contour_cluster_radius(c.center, c.members, a, b, 4, 2, 8)
+            for (family, params, count, direction) in ((:lower, b, 4, 1), (:upper, a, 2, -1))
+                for j in 1:count, ell in 0:20
+                    base = family === :lower ? params[j] : params[j] - 1
+                    inside = abs(base + direction * ell - c.center) < radius
+                    valid_geometry &= inside == ((family, j, ell) in c.members)
+                end
+            end
+        end
+        @test valid_geometry
+    end
+
+    # Nearest-pole search must include the infinite lattice, even when an
+    # opposite-family pole has an index much larger than the tail truncation.
+    reach, nearest = MeijerG._contour_cluster_bounds(100.0,
+        MeijerG._ContourMember[(:lower, 1, 0)], (201.1,), (100.0,), 1, 1)
+    @test reach == 0
+    @test nearest ≈ 0.1
+    @test_throws ErrorException MeijerG._contour_cluster_radius(0.0,
+        MeijerG._ContourMember[(:lower, 1, 0), (:lower, 2, 0)], (), (0.0, 0.09, 0.1), 3, 0, 8)
+
+    z0 = 2.2e-5 * cis(-0.084)
+    z = 200 * z0 / abs(z0)
+    for (spacing, reference) in (
+        (0.01, 2565.2053008286086 + 31901.42086833962im),
+        (1e-7, -3125.9315171519553 + 28114.621558855673im),
+        (0.0, -3125.9823082598283 + 28114.58344567426im))
+        b = (Tuple(beta + j * spacing for j in 0:3)..., passive...)
+        value = meijerg_contour(a, b, 4, 2, z; contour_case=:ii)
+        @test abs(value - reference) / abs(reference) < 1e-8
+    end
+end

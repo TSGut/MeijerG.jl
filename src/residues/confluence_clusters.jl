@@ -191,7 +191,7 @@ function _make_singleton_cluster(branch::Symbol, member::_ClusterCandidate{P}, d
 end
 
 # Greedy grouping of sorted candidates by position, each unused candidate seeding a group.
-# A function barrier so the quadratic loop runs on the concretely typed candidate vector.
+# A function barrier so the scan runs on the concretely typed candidate vector.
 # Returns the member indices of each group in seed order.
 function _cluster_groups(candidates::Vector{NT}, near_radius) where {NT}
     used = falses(length(candidates))
@@ -203,6 +203,9 @@ function _cluster_groups(candidates::Vector{NT}, near_radius) where {NT}
         used[i] = true
         tol = max(near_radius, _cluster_exact_tol(seed.position))
         for j in (i + 1):length(candidates)
+            # Sorted real coordinates: all later poles are outside this seed's
+            # radius once their real displacement exceeds its tolerance.
+            real(candidates[j].position) - real(seed.position) > tol && break
             used[j] && continue
             if abs(candidates[j].position - seed.position) <= tol
                 push!(group, j)

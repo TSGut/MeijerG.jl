@@ -3,6 +3,35 @@ using MeijerG
 
 relerr_higher(x, y) = abs(x - y) / max(abs(y), eps(Float64))
 
+@testset "Repeated member gamma arguments, complex lower and upper branches" begin
+    # Lower-branch mpmath references at 90 digits, at the exact binary inputs.
+    # Binary-exact pole offsets repeat gamma arguments in both native and DD
+    # arithmetic. Inversion supplies upper cases, allowing for input rounding.
+    cases = (
+        (3, 0.5 + 0.1im, 0.5399729227786734 - 0.001922479803801270im),
+        (3, 5.0 + 0.25im, 0.3590998229586110 - 0.006283853828803371im),
+        (4, 0.5 + 0.1im, 1.3047494292687983 + 0.02032756285430836im),
+        (4, 5.0 + 0.25im, 1.1847743826075133 - 0.01089423394013108im),
+    )
+    for (r, z, reference) in cases, branch in (:lower, :upper)
+        poles = ntuple(k -> 0.25 + k - 1, r)
+        a, b, m, n, w = branch === :lower ?
+            ((0.3,), poles, r, 1, z) :
+            (map(x -> 1 - x, poles), (0.7,), 1, r, inv(z))
+        selected = MeijerG._try_meijerg_slater_higher_logratio_jet(a, b, m, n, w)
+        @test selected.status === :ok
+        @test selected.selected
+        @test relerr_higher(selected.value, reference) < 5e-13
+        for C in (ComplexF64, MeijerG._CDD)
+            result = MeijerG._higher_logratio_branch_sum(a, b, m, n, w, branch;
+                                                        C, maxell=128)
+            @test result.status === :ok
+            tolerance = C === ComplexF64 ? 5e-11 : 5e-13
+            @test relerr_higher(ComplexF64(result.value), reference) < tolerance
+        end
+    end
+end
+
 @testset "Higher-order confluence internals" begin
     @testset "standalone Laurent exact multiplicity" begin
         b1 = 0.5

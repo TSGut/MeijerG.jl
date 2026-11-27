@@ -13,6 +13,12 @@ end
 
 @testset "Supported explicit reductions" begin
     @testset "Order cancellation" begin
+        @test MeijerG._reduce_orders((0.2, 0.7), (0.3, 0.9), 1, 1) === nothing
+        @test MeijerG._reduce_orders((1.0,), (0.25, 1.0), 1, 1) == ((), (0.25,), 1, 0)
+        # Mixed tuples preserve collection promotion. Signed zeros are not isequal.
+        @test MeijerG._reduce_orders((1, 2.0), (1.0, 3.0), 0, 2) == ((2.0,), (3.0,), 0, 1)
+        @test MeijerG._reduce_orders((-0.0,), (0.0,), 0, 1) === nothing
+        @test isequal(MeijerG._reduce_orders((NaN,), (0.0,), 0, 1), ((NaN,), (0.0,), 0, 1))
         for z in sample_real_points((0.15, 0.6, 1.2); seed=101, lo=0.1, hi=1.4)
             reduced = meijerg((1.0,), (0.25, 1.0), 1, 1, z)
             reference = meijerg((), (0.25,), 1, 0, z)
